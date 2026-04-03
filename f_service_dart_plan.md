@@ -720,6 +720,14 @@ dev_dependencies:
 
 ## 9. Roteiro de Desenvolvimento
 
+### Fase 0 — Repositório e estrutura inicial ✅
+- [x] `git init` com branch `master`
+- [x] `.gitignore` para Dart/pub
+- [ ] Criar repositório em `github.com/bvicenzo/monart`
+- [ ] Estrutura de diretórios do pacote (`lib/src/`, `test/`, `example/`)
+- [ ] `pubspec.yaml` e `analysis_options.yaml`
+- [ ] Primeiro push para o GitHub
+
 ### Fase 1 — MVP (core)
 - [ ] `Result<Value, Error>` (sealed class) com `Success` e `Failure`
 - [ ] Métodos: `when`, `onSuccess`, `onFailure`, `andThen`, `orElse`, `map`, `mapError`
