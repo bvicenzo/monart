@@ -1,12 +1,12 @@
 # Plano: `monart`
 
-> Inspirado na gem Ruby [f_service](https://github.com/fretadao/f_service), adaptado para as idiomaticidades do Dart 3+.
+> Inspired by the Ruby gem [f_service](https://github.com/fretadao/f_service), adapted to Dart 3+ idioms.
 
-**Nome do pacote:** `monart`
-**Repositório:** `https://github.com/bvicenzo/monart`
-**SDK mínimo:** Dart 3.0 (para `sealed classes` e pattern matching)
-**Dependências:** nenhuma (Dart puro)
-**Publicação:** pub.dev
+**Package name:** `monart`
+**Repository:** `https://github.com/bvicenzo/monart`
+**Minimum SDK:** Dart 3.0 (for `sealed classes` and pattern matching)
+**Dependencies:** none (pure Dart)
+**Publication:** pub.dev
 
 ---
 
@@ -30,17 +30,7 @@ final registration = CreateUser(name: name, email: email).call();
 for (final orderItem in order.items) { ... }
 ```
 
-O mesmo vale para parâmetros de tipo genérico. Dart não obriga letras únicas — `Result<Value, Error>` diz o que `Result<S, F>` esconde.
-
-```dart
-// convenção da comunidade — não obrigação da linguagem
-Result<S, F> andThen<T>(Result<T, F> Function(S value) fn)
-
-// o que este projeto usa
-Result<NextValue, Error> andThen<NextValue>(
-  Result<NextValue, Error> Function(Value value) nextStep,
-)
-```
+O mesmo vale para parâmetros de tipo genérico. Dart não obriga letras únicas — `Result<Outcome, Value>` diz o que `Result<S, F>` esconde.
 
 ### 1.2 Métodos explícitos em vez de operadores
 
@@ -78,33 +68,19 @@ Cada método faz uma coisa. Se você precisa de um comentário para explicar uma
 
 Quando uma chamada ou estrutura quebra em múltiplas linhas, cada elemento ocupa sua própria linha. O fechamento fica sozinho na última linha. Indentação é fixa — nunca alinhada com o início da expressão.
 
-Em Dart, a vírgula final (`trailing comma`) é o mecanismo que aciona esse comportamento automaticamente no `dart format`:
+Em Dart, a vírgula final (`trailing comma`) aciona esse comportamento automaticamente no `dart format`:
 
 ```dart
-// sem trailing comma — dart format pode compactar
-final registration = CreateUser(name: name, email: email).call();
-
-// com trailing comma — dart format garante uma linha por argumento
 final registration = CreateUser(
   name: name,
   email: email,
 ).call();
-```
 
-```dart
-// list
 final allowedStatuses = [
   OrderStatus.pending,
   OrderStatus.confirmed,
   OrderStatus.processing,
 ];
-
-// map
-final defaultOptions = {
-  'retries': 3,
-  'timeout': 30,
-  'verbose': false,
-};
 ```
 
 ---
@@ -117,11 +93,11 @@ monart/
 │   ├── monart.dart                           # barrel export
 │   └── src/
 │       ├── result/
-│       │   ├── result.dart                   # sealed class Result<Value, Error>
-│       │   ├── success.dart                  # final class Success<Value, Error>
-│       │   └── failure.dart                  # final class Failure<Value, Error>
+│       │   ├── result.dart                   # sealed class Result<Outcome, Value>
+│       │   ├── success.dart                  # final class Success<Outcome, Value>
+│       │   └── failure.dart                  # final class Failure<Outcome, Value>
 │       ├── service/
-│       │   └── service_base.dart             # abstract class ServiceBase<Value, Error>
+│       │   └── service_base.dart             # abstract class ServiceBase<Outcome, Value>
 │       ├── extensions/
 │       │   └── future_result_extension.dart  # async support
 │       └── exceptions/
@@ -145,215 +121,215 @@ monart/
 
 ## 3. Design da API
 
-### 3.1 `Result<Value, Error>` — O coração da lib
+### 3.1 `Result<Outcome extends Enum, Value>` — O coração da lib
 
 Usa **sealed class** do Dart 3, permitindo pattern matching exaustivo no `switch`.
+
+Um único `Outcome` enum por service cobre todos os desfechos possíveis — sucessos e falhas. Isso reflete a filosofia do Ruby onde symbols cobrem ambos os casos, com a vantagem da verificação em tempo de compilação do Dart.
 
 ```dart
 // lib/src/result/result.dart
 
-sealed class Result<Value, Error> {
-  const Result();
+sealed class Result<Outcome extends Enum, Value> {
+  const Result(this.outcome);
 
-  bool get isSuccess => this is Success<Value, Error>;
-  bool get isFailure => this is Failure<Value, Error>;
+  final Outcome outcome;
+
+  bool get isSuccess => this is Success<Outcome, Value>;
+  bool get isFailure => this is Failure<Outcome, Value>;
 
   Value? get value => switch (this) {
     Success(:final value) => value,
     Failure()             => null,
   };
 
-  Error? get error => switch (this) {
-    Success()             => null,
-    Failure(:final error) => error,
-  };
-
-  Value valueOrThrow() => switch (this) {
-    Success(:final value) => value,
-    Failure()             => throw MonartException('Tried to access value on a Failure'),
-  };
-
-  Error errorOrThrow() => switch (this) {
-    Success()             => throw MonartException('Tried to access error on a Success'),
-    Failure(:final error) => error,
-  };
-
   /// Forces handling of both cases. The compiler warns if any case is missing.
   Output when<Output>({
-    required Output Function(Value value) success,
-    required Output Function(Error error) failure,
+    required Output Function(Outcome outcome, Value value) success,
+    required Output Function(Outcome outcome, Value? value) failure,
   }) => switch (this) {
-    Success(:final value) => success(value),
-    Failure(:final error) => failure(error),
+    Success(:final value) => success(outcome, value),
+    Failure(:final value) => failure(outcome, value),
   };
 
-  Result<Value, Error> onSuccess(void Function(Value value) fn) {
-    if (this case Success(:final value)) fn(value);
+  Result<Outcome, Value> onSuccess(void Function(Outcome outcome, Value value) fn) {
+    if (this case Success(:final value)) fn(outcome, value);
     return this;
   }
 
-  Result<Value, Error> onFailure(void Function(Error error) fn) {
-    if (this case Failure(:final error)) fn(error);
+  Result<Outcome, Value> onFailure(void Function(Outcome outcome, Value? value) fn) {
+    if (this case Failure(:final value)) fn(outcome, value);
     return this;
   }
 
   /// Runs the next step if successful; short-circuits on failure.
-  Result<NextValue, Error> andThen<NextValue>(
-    Result<NextValue, Error> Function(Value value) nextStep,
+  Result<Outcome, NextValue> andThen<NextValue>(
+    Result<Outcome, NextValue> Function(Value value) nextStep,
   ) => switch (this) {
     Success(:final value) => nextStep(value),
-    Failure()             => Failure((this as Failure<Value, Error>).error),
+    Failure(:final value) => Failure(outcome, value),
   };
 
   /// Recovers from a failure; ignored if already successful.
-  Result<Value, RecoveredError> orElse<RecoveredError>(
-    Result<Value, RecoveredError> Function(Error error) recovery,
+  Result<Outcome, Value> orElse(
+    Result<Outcome, Value> Function(Outcome outcome, Value? value) recovery,
   ) => switch (this) {
-    Success()             => Success((this as Success<Value, Error>).value),
-    Failure(:final error) => recovery(error),
+    Success() => this,
+    Failure(:final value) => recovery(outcome, value),
   };
 
-  Result<MappedValue, Error> map<MappedValue>(
+  Result<Outcome, MappedValue> map<MappedValue>(
     MappedValue Function(Value value) transform,
   ) => switch (this) {
-    Success(:final value) => Success(transform(value)),
-    Failure()             => Failure((this as Failure<Value, Error>).error),
-  };
-
-  Result<Value, MappedError> mapError<MappedError>(
-    MappedError Function(Error error) transform,
-  ) => switch (this) {
-    Success()             => Success((this as Success<Value, Error>).value),
-    Failure(:final error) => Failure(transform(error)),
+    Success(:final value) => Success(outcome, transform(value)),
+    Failure(:final value) => Failure(outcome, value),
   };
 }
 ```
 
-### 3.2 `Success<Value, Error>` e `Failure<Value, Error>`
+### 3.2 `Success<Outcome, Value>` e `Failure<Outcome, Value>`
 
 ```dart
 // lib/src/result/success.dart
-final class Success<Value, Error> extends Result<Value, Error> {
-  const Success(this.value);
-  final Value value;
+final class Success<Outcome extends Enum, Value> extends Result<Outcome, Value> {
+  const Success(super.outcome, this.value);
+
+  final Value value;  // required — success always carries a value
 
   @override
-  String toString() => 'Success($value)';
+  String toString() => 'Success($outcome, $value)';
 }
 
 // lib/src/result/failure.dart
-final class Failure<Value, Error> extends Result<Value, Error> {
-  const Failure(this.error);
-  final Error error;
+final class Failure<Outcome extends Enum, Value> extends Result<Outcome, Value> {
+  const Failure(super.outcome, [this.value]);
+
+  final Value? value;  // optional — failure may carry the domain object for context
 
   @override
-  String toString() => 'Failure($error)';
+  String toString() => 'Failure($outcome, $value)';
 }
 ```
 
-### 3.3 Tipos Semânticos com Enums
-
-Em Dart, a abordagem idiomática para tipos semânticos é usar **enums** como valor de sucesso ou erro. O compilador garante que todos os casos sejam tratados no `switch`.
-
-```dart
-enum UserRegistrationError { nameRequired, emailInvalid, emailTaken }
-
-Result<User, UserRegistrationError> registration = Success(newUser);
-
-registration.when(
-  success: (registeredUser) => redirectToDashboard(registeredUser),
-  failure: (reason) => switch (reason) {
-    UserRegistrationError.nameRequired => showError('Name is required'),
-    UserRegistrationError.emailInvalid => showError('Invalid email address'),
-    UserRegistrationError.emailTaken   => showError('Email is already taken'),
-  },
-);
-```
-
-Para quem quer múltiplas tags no estilo Ruby, a lib oferece `TaggedSuccess` e `TaggedFailure` como alternativa — ver Fase 3 do roteiro.
-
-### 3.4 `ServiceBase<Value, Error>` — Classe Base dos Services
+### 3.3 `ServiceBase<Outcome extends Enum, Value>` — Classe Base dos Services
 
 ```dart
 // lib/src/service/service_base.dart
 
-abstract class ServiceBase<Value, Error> {
+abstract class ServiceBase<Outcome extends Enum, Value> {
   const ServiceBase();
 
   /// Implements the business logic. Must return either [Success] or [Failure].
-  Result<Value, Error> run();
+  Result<Outcome, Value> run();
 
-  /// Runs the service. Equivalent to `.()` in Ruby.
-  Result<Value, Error> call() => run();
+  /// Runs the service.
+  Result<Outcome, Value> call() => run();
 
-  /// Creates a [Success]. Use inside [run].
-  Success<Value, Error> success(Value value) => Success(value);
+  /// Creates a [Success] with a mandatory outcome tag and value.
+  Success<Outcome, Value> success(Outcome outcome, Value value) =>
+      Success(outcome, value);
 
-  /// Creates a [Failure]. Use inside [run].
-  Failure<Value, Error> failure(Error error) => Failure(error);
+  /// Creates a [Failure] with a mandatory outcome tag and optional context value.
+  Failure<Outcome, Value> failure(Outcome outcome, [Value? value]) =>
+      Failure(outcome, value);
 
-  /// Converts a boolean condition into a [Result].
-  /// true → [Success], false → [Failure].
-  Result<Value, Error> check({
-    required bool Function() condition,
-    required Value successValue,
-    required Error failureError,
-  }) => condition() ? Success(successValue) : Failure(failureError);
+  /// Validates a condition. Carries [data] on both [Success] and [Failure]
+  /// so the caller always knows what was being validated.
+  /// [condition] is the SUCCESS predicate — true means valid.
+  Result<Outcome, CheckedValue> check<CheckedValue>(
+    Outcome outcome,
+    CheckedValue data,
+    bool Function() condition,
+  ) => condition()
+      ? Success(outcome, data)
+      : Failure(outcome, data);
 
   /// Runs an operation and wraps any thrown exception as a [Failure].
-  Result<Value, Error> tryRun(
+  Result<Outcome, Value> tryRun(
     Value Function() operation, {
-    Error Function(Object exception, StackTrace stack)? onException,
+    Outcome? outcomeOnException,
+    Value? valueOnException,
   }) {
     try {
-      return Success(operation());
+      return Success(run().outcome, operation());
     } catch (exception, stack) {
-      if (onException != null) return Failure(onException(exception, stack));
+      if (outcomeOnException != null) {
+        return Failure(outcomeOnException, valueOnException);
+      }
       rethrow;
     }
   }
 }
 ```
 
-### 3.5 Suporte a `async` — `FutureResult<Value, Error>`
+### 3.4 O padrão `run()` como pipeline
+
+O `run()` lê como uma narrativa do fluxo de negócio. Cada passo é delegado a um método privado com responsabilidade única. Early returns (validações) ficam no topo da cadeia; o caso feliz é sempre o último.
+
+```dart
+enum CreateUserOutcome { nameRequired, emailInvalid, created, saveFailed }
+
+class CreateUser extends ServiceBase<CreateUserOutcome, User> {
+  const CreateUser({required this.name, required this.email});
+
+  final String name;
+  final String email;
+
+  @override
+  Result<CreateUserOutcome, User> run() =>
+      _requireName()
+          .andThen((_) => _requireEmail())
+          .andThen((_) => _persistUser());
+
+  Result<CreateUserOutcome, String> _requireName() =>
+      check(CreateUserOutcome.nameRequired, name, () => name.isNotEmpty);
+
+  Result<CreateUserOutcome, String> _requireEmail() =>
+      check(CreateUserOutcome.emailInvalid, email, () => email.contains('@'));
+
+  Result<CreateUserOutcome, User> _persistUser() {
+    final newUser = User(name: name, email: email);
+    return newUser.save()
+        ? success(CreateUserOutcome.created, newUser)
+        : failure(CreateUserOutcome.saveFailed, newUser);
+  }
+}
+```
+
+### 3.5 Suporte a `async` — `FutureResult<Outcome, Value>`
 
 ```dart
 // lib/src/extensions/future_result_extension.dart
 
-typedef FutureResult<Value, Error> = Future<Result<Value, Error>>;
+typedef FutureResult<Outcome extends Enum, Value> = Future<Result<Outcome, Value>>;
 
-extension FutureResultX<Value, Error> on Future<Result<Value, Error>> {
-  FutureResult<NextValue, Error> andThen<NextValue>(
-    FutureOr<Result<NextValue, Error>> Function(Value value) nextStep,
+extension FutureResultX<Outcome extends Enum, Value> on Future<Result<Outcome, Value>> {
+  FutureResult<Outcome, NextValue> andThen<NextValue>(
+    FutureOr<Result<Outcome, NextValue>> Function(Value value) nextStep,
   ) => then(
     (currentResult) => switch (currentResult) {
       Success(:final value) => nextStep(value),
-      Failure()             => Future.value(
-          Failure((currentResult as Failure<Value, Error>).error),
+      Failure(:final value) => Future.value(
+          Failure(currentResult.outcome, value),
         ),
     },
   );
 
-  FutureResult<Value, RecoveredError> orElse<RecoveredError>(
-    FutureOr<Result<Value, RecoveredError>> Function(Error error) recovery,
-  ) => then(
-    (currentResult) => switch (currentResult) {
-      Success()             => Future.value(
-          Success((currentResult as Success<Value, Error>).value),
-        ),
-      Failure(:final error) => recovery(error),
-    },
-  );
+  Future<void> onSuccess(
+    FutureOr<void> Function(Outcome outcome, Value value) fn,
+  ) => then((currentResult) {
+    if (currentResult case Success(:final value)) {
+      return fn(currentResult.outcome, value);
+    }
+  });
 
-  Future<void> onSuccess(FutureOr<void> Function(Value value) fn) =>
-      then((currentResult) {
-        if (currentResult case Success(:final value)) return fn(value);
-      });
-
-  Future<void> onFailure(FutureOr<void> Function(Error error) fn) =>
-      then((currentResult) {
-        if (currentResult case Failure(:final error)) return fn(error);
-      });
+  Future<void> onFailure(
+    FutureOr<void> Function(Outcome outcome, Value? value) fn,
+  ) => then((currentResult) {
+    if (currentResult case Failure(:final value)) {
+      return fn(currentResult.outcome, value);
+    }
+  });
 }
 ```
 
@@ -361,41 +337,28 @@ extension FutureResultX<Value, Error> on Future<Result<Value, Error>> {
 
 ## 4. Exemplos de Uso
 
-### 4.1 Service Básico
+### 4.1 Chamada e tratamento do resultado
 
 ```dart
-enum UserRegistrationError { nameRequired, emailInvalid }
-
-class CreateUser extends ServiceBase<User, UserRegistrationError> {
-  const CreateUser({required this.name, required this.email});
-
-  final String name;
-  final String email;
-
-  @override
-  Result<User, UserRegistrationError> run() {
-    if (name.isEmpty) return failure(UserRegistrationError.nameRequired);
-    if (!email.contains('@')) return failure(UserRegistrationError.emailInvalid);
-
-    return success(User(name: name, email: email));
-  }
-}
-
-// Pattern matching — the compiler warns if any case is missing
+// The caller decides what to do with the value — service is agnostic
 final registration = CreateUser(name: 'Alice', email: 'alice@example.com').call();
 
+// Pattern matching — compiler enforces all cases are handled
 switch (registration) {
-  case Success(:final value):
-    print('User created: ${value.name}');
-  case Failure(:final error):
-    print('Failed: $error');
+  case Success(:final outcome, :final value):
+    print('User created with outcome $outcome: ${value.name}');
+  case Failure(:final outcome, :final value):
+    print('Failed with $outcome — context: $value');
 }
 
-// Chained callbacks
-CreateUser(name: 'Alice', email: 'alice@example.com')
-    .call()
-    .onSuccess((registeredUser) => print('Created: ${registeredUser.name}'))
-    .onFailure((reason) => print('Failed: $reason'));
+// A worker just logs the outcome
+registration.onFailure((outcome, user) => logger.warn('$outcome: ${user?.id}'));
+
+// A form maps errors to fields
+registration.onFailure((outcome, user) {
+  nameField.error = user?.errors['name'];
+  emailField.error = user?.errors['email'];
+});
 ```
 
 ### 4.2 Encadeamento de Services (Railway)
@@ -405,28 +368,30 @@ final onboarding = CreateUser(name: 'Alice', email: 'alice@example.com')
     .call()
     .andThen((registeredUser) => SendWelcomeEmail(user: registeredUser).call())
     .andThen((registeredUser) => TrackSignup(userId: registeredUser.id).call())
-    .onSuccess((registeredUser) => print('Onboarding complete for ${registeredUser.name}'))
-    .onFailure((reason) => print('Onboarding failed: $reason'));
+    .onSuccess((outcome, registeredUser) => print('Onboarding complete: ${registeredUser.name}'))
+    .onFailure((outcome, registeredUser) => print('Onboarding failed at $outcome'));
 ```
 
 ### 4.3 Service Async
 
 ```dart
-class FetchOrder extends ServiceBase<Order, OrderFetchError> {
+enum FetchOrderOutcome { notFound, timeout, fetched }
+
+class FetchOrder extends ServiceBase<FetchOrderOutcome, Order> {
   const FetchOrder({required this.orderId});
   final String orderId;
 
   @override
-  Result<Order, OrderFetchError> run() => throw UnimplementedError('Use runAsync');
+  Result<FetchOrderOutcome, Order> run() => throw UnimplementedError('Use runAsync');
 
-  Future<Result<Order, OrderFetchError>> runAsync() async {
+  Future<Result<FetchOrderOutcome, Order>> runAsync() async {
     try {
       final orderData = await ordersApi.get(orderId);
-      return success(Order.fromJson(orderData));
+      return success(FetchOrderOutcome.fetched, Order.fromJson(orderData));
     } on TimeoutException {
-      return failure(OrderFetchError.timeout);
+      return failure(FetchOrderOutcome.timeout);
     } on NotFoundException {
-      return failure(OrderFetchError.notFound);
+      return failure(FetchOrderOutcome.notFound);
     }
   }
 }
@@ -434,8 +399,8 @@ class FetchOrder extends ServiceBase<Order, OrderFetchError> {
 final orderSync = await FetchOrder(orderId: 'ord-123')
     .runAsync()
     .andThen((fetchedOrder) => SyncOrderStatus(order: fetchedOrder).runAsync())
-    .onSuccess((fetchedOrder) => print('Order updated: ${fetchedOrder.id}'))
-    .onFailure((reason) => print('Sync failed: $reason'));
+    .onSuccess((outcome, fetchedOrder) => print('Order synced: ${fetchedOrder.id}'))
+    .onFailure((outcome, fetchedOrder) => print('Sync failed: $outcome'));
 ```
 
 ---
@@ -446,53 +411,48 @@ O pacote `test` do Dart usa `group` e `test` — equivalentes a `describe`/`cont
 
 ### 5.1 A árvore de testes espelha o fluxo do código
 
-A estrutura de `group` aninhados reflete a árvore de decisão do código:
-
-- **Premissas externas** (early returns) ficam nos grupos mais externos
+- **Premissas externas** (early returns / validações) ficam nos grupos mais externos
 - **Premissas internas** ficam nos grupos aninhados
+- `and` e `but` tornam explícito que a premissa é uma conjunção com o grupo pai
 - **Caso feliz** — quando todas as condições são satisfeitas — é sempre o último
-
-`and` e `but` nos nomes dos grupos internos tornam explícito que aquela premissa é uma conjunção com a premissa do grupo pai.
 
 ### 5.2 Exemplo: `Result#andThen`
 
 ```dart
-// test/result/result_test.dart
-
 group('Result', () {
   group('#andThen', () {
     group('when the result is a failure', () {
       test('does not execute the next step', () {
-        var nextStepExecuted = false;
-        Failure<int, String>('original error').andThen((_) {
-          nextStepExecuted = true;
-          return Success(42);
+        var nextStepWasExecuted = false;
+        Failure<TestOutcome, String>(TestOutcome.failed, 'original').andThen((_) {
+          nextStepWasExecuted = true;
+          return Success(TestOutcome.done, 'next');
         });
-        expect(nextStepExecuted, isFalse);
+        expect(nextStepWasExecuted, isFalse);
       });
 
-      test('preserves the original error', () {
-        final chained = Failure<int, String>('original error')
-            .andThen((_) => Success(42));
-        expect(chained, isA<Failure<int, String>>());
-        expect(chained.error, equals('original error'));
+      test('preserves the original outcome and value', () {
+        final chained = Failure<TestOutcome, String>(TestOutcome.failed, 'original')
+            .andThen((_) => Success(TestOutcome.done, 'next'));
+        expect(chained.outcome, equals(TestOutcome.failed));
+        expect(chained.value, equals('original'));
       });
     });
 
     group('when the result is a success', () {
       group('and the next step fails', () {
         test('returns the next step failure', () {
-          final chained = Success<int, String>(1)
-              .andThen((_) => Failure<int, String>('next step failed'));
-          expect(chained.error, equals('next step failed'));
+          final chained = Success<TestOutcome, String>(TestOutcome.done, 'value')
+              .andThen((_) => Failure<TestOutcome, String>(TestOutcome.failed));
+          expect(chained.outcome, equals(TestOutcome.failed));
         });
       });
 
       group('and the next step succeeds', () {
-        test('returns the next step value', () {
-          final chained = Success<int, String>(1)
-              .andThen((currentValue) => Success(currentValue * 10));
-          expect(chained.value, equals(10));
+        test('returns the next step outcome and value', () {
+          final chained = Success<TestOutcome, int>(TestOutcome.done, 2)
+              .andThen((currentValue) => Success(TestOutcome.done, currentValue * 10));
+          expect(chained.value, equals(20));
         });
       });
     });
@@ -500,13 +460,9 @@ group('Result', () {
 });
 ```
 
-### 5.3 Exemplo: `ServiceBase` com validações em camadas
-
-Demonstra a estrutura completa — cada validação tem sua própria subárvore, com o caso feliz sempre por último. O `does not validate X` documenta quando uma regra não entra em cena, tornando o comportamento explícito.
+### 5.3 Exemplo: `CreateUser` com validações em camadas
 
 ```dart
-// test/service/create_user_test.dart
-
 group('CreateUser', () {
   group('#run', () {
     group('name', () {
@@ -514,7 +470,7 @@ group('CreateUser', () {
         group('when name is not provided', () {
           test('requires name', () {
             final registration = CreateUser(name: '', email: 'alice@test.com').call();
-            expect(registration.error, equals(UserRegistrationError.nameRequired));
+            expect(registration.outcome, equals(CreateUserOutcome.nameRequired));
           });
         });
 
@@ -525,63 +481,14 @@ group('CreateUser', () {
           });
         });
       });
-
-      group('length', () {
-        group('when name is not provided', () {
-          test('does not validate name length', () {
-            final registration = CreateUser(name: '', email: 'alice@test.com').call();
-            // fails on presence, not on length
-            expect(registration.error, isNot(equals(UserRegistrationError.nameTooShort)));
-          });
-        });
-
-        group('when name is provided', () {
-          group('and name has less than 2 characters', () {
-            test('requires at least 2 characters', () {
-              final registration = CreateUser(name: 'A', email: 'alice@test.com').call();
-              expect(registration.error, equals(UserRegistrationError.nameTooShort));
-            });
-          });
-
-          group('and name has exactly 2 characters', () {
-            test('accepts given name', () {
-              final registration = CreateUser(name: 'Al', email: 'alice@test.com').call();
-              expect(registration, isA<Success>());
-            });
-          });
-
-          group('and name has more than 2 characters', () {
-            test('accepts given name', () {
-              final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
-              expect(registration, isA<Success>());
-            });
-          });
-        });
-      });
     });
 
     group('email', () {
-      group('presence', () {
+      group('presence and format', () {
         group('when email is not provided', () {
           test('requires email', () {
             final registration = CreateUser(name: 'Alice', email: '').call();
-            expect(registration.error, equals(UserRegistrationError.emailRequired));
-          });
-        });
-
-        group('when email is provided', () {
-          test('accepts given email', () {
-            final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
-            expect(registration, isA<Success>());
-          });
-        });
-      });
-
-      group('format', () {
-        group('when email is not provided', () {
-          test('does not validate email format', () {
-            final registration = CreateUser(name: 'Alice', email: '').call();
-            expect(registration.error, isNot(equals(UserRegistrationError.emailInvalid)));
+            expect(registration.outcome, equals(CreateUserOutcome.emailInvalid));
           });
         });
 
@@ -589,7 +496,12 @@ group('CreateUser', () {
           group('and email has no @ character', () {
             test('requires valid email format', () {
               final registration = CreateUser(name: 'Alice', email: 'notanemail').call();
-              expect(registration.error, equals(UserRegistrationError.emailInvalid));
+              expect(registration.outcome, equals(CreateUserOutcome.emailInvalid));
+            });
+
+            test('carries the invalid email for context', () {
+              final registration = CreateUser(name: 'Alice', email: 'notanemail').call();
+              expect(registration.value, equals('notanemail'));
             });
           });
 
@@ -606,9 +518,8 @@ group('CreateUser', () {
     group('when all attributes are valid', () {
       test('creates the user', () {
         final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
-        expect(registration, isA<Success>());
+        expect(registration.outcome, equals(CreateUserOutcome.created));
         expect(registration.value?.name, equals('Alice'));
-        expect(registration.value?.email, equals('alice@test.com'));
       });
     });
   });
@@ -618,17 +529,16 @@ group('CreateUser', () {
 ### 5.4 Matchers utilitários
 
 ```dart
-// Usage in tests
+// Usage
 expect(registration, isSuccess());
-expect(registration, isSuccess(isA<User>()));
-expect(registration, isFailure(equals(UserRegistrationError.emailInvalid)));
+expect(registration, isSuccess(withOutcome: CreateUserOutcome.created));
+expect(registration, isFailure(withOutcome: CreateUserOutcome.emailInvalid));
+expect(registration, isFailure(withValue: isA<String>()));
 ```
 
 ---
 
 ## 6. Configuração do `analysis_options.yaml`
-
-O equivalente Dart do `.rubocop.yml` — define as regras de lint que o compilador verifica automaticamente.
 
 ```yaml
 include: package:lints/recommended.yaml
@@ -649,14 +559,13 @@ linter:
     - unnecessary_lambdas
 
     # Explicit methods over syntactic sugar
-    - prefer_is_empty           # .isEmpty instead of .length == 0
-    - prefer_is_not_empty       # .isNotEmpty instead of .length != 0
-    - prefer_contains           # .contains() instead of indexOf != -1
-    - use_string_buffers        # StringBuffer instead of string concatenation in loops
+    - prefer_is_empty
+    - prefer_is_not_empty
+    - prefer_contains
+    - use_string_buffers
 
-    # Formatting and structure
-    # trailing comma triggers dart format to expand each argument to its own line
-    # — equivalent to MultilineMethodCallBraceLayout, MultilineArrayBraceLayout, etc.
+    # Formatting — trailing comma triggers dart format to put each element on its own line
+    # equivalent to MultilineMethodCallBraceLayout, MultilineArrayBraceLayout, etc.
     - require_trailing_commas
     - always_put_required_named_parameters_first
     - sort_constructors_first
@@ -695,26 +604,26 @@ dev_dependencies:
 
 ## 8. Comparação: Ruby vs Dart
 
-| Conceito Ruby               | Equivalente Dart                                        |
-|-----------------------------|---------------------------------------------------------|
-| `FService::Base`            | `abstract class ServiceBase<Value, Error>`              |
-| `FService::Result::Success` | `final class Success<Value, Error>`                     |
-| `FService::Result::Failure` | `final class Failure<Value, Error>`                     |
-| `Success(:created)`         | `Success(MyEnum.created)` ou `TaggedSuccess`            |
-| `.call` / `.()`             | `.call()` na instância                                  |
-| `#run`                      | `Result<Value, Error> run()` (override obrigatório)     |
-| `and_then { \|v\| }`        | `.andThen((nextValue) => ...)`                          |
-| `catch { \|e\| }`           | `.orElse((reason) => ...)`                              |
-| `on_success { \|v\| }`      | `.onSuccess((value) { ... })`                           |
-| `on_failure { \|e\| }`      | `.onFailure((error) { ... })`                           |
-| `Check(:type) { cond }`     | `check(condition: () => cond, ...)`                     |
-| `Try(:type) { block }`      | `tryRun(() => block)`                                   |
-| `result.value!`             | `result.valueOrThrow()`                                 |
-| Símbolos como type tag      | Enums (idiomático) ou `TaggedResult`                    |
-| RSpec matchers              | `isSuccess` / `isFailure` para `package:test`           |
-| `.rubocop.yml`              | `analysis_options.yaml`                                 |
-| `NestedContextImproperStart`| convenção `and`/`but` nos nomes de `group`              |
-| `MultilineMethodCallBraceLayout` | `require_trailing_commas` + `dart format`          |
+| Conceito Ruby                       | Equivalente Dart                                         |
+|-------------------------------------|----------------------------------------------------------|
+| `FService::Base`                    | `abstract class ServiceBase<Outcome, Value>`             |
+| `FService::Result::Success`         | `final class Success<Outcome, Value>`                    |
+| `FService::Result::Failure`         | `final class Failure<Outcome, Value>`                    |
+| `Success(:created, data: user)`     | `success(CreateUserOutcome.created, user)`               |
+| `Failure(:invalid, data: user)`     | `failure(CreateUserOutcome.invalid, user)`               |
+| `Check(:tag) { condition }`         | `check(outcome, data, () => condition)`                  |
+| `.call` / `.()`                     | `.call()` na instância                                   |
+| `#run`                              | `Result<Outcome, Value> run()` (override obrigatório)    |
+| `and_then { \|v\| }`               | `.andThen((value) => ...)`                               |
+| `catch { \|e\| }`                  | `.orElse((outcome, value) => ...)`                       |
+| `on_success { \|v\| }`             | `.onSuccess((outcome, value) { ... })`                   |
+| `on_failure { \|e\| }`             | `.onFailure((outcome, value) { ... })`                   |
+| `Try(:type) { block }`              | `tryRun(() => block)`                                    |
+| Symbols como type tag               | `Enum` — um por service, cobre todos os desfechos        |
+| RSpec matchers                      | `isSuccess` / `isFailure` para `package:test`            |
+| `.rubocop.yml`                      | `analysis_options.yaml`                                  |
+| `NestedContextImproperStart`        | convenção `and`/`but` nos nomes de `group`               |
+| `MultilineMethodCallBraceLayout`    | `require_trailing_commas` + `dart format`                |
 
 ---
 
@@ -723,26 +632,29 @@ dev_dependencies:
 ### Fase 0 — Repositório e estrutura inicial ✅
 - [x] `git init` com branch `master`
 - [x] `.gitignore` para Dart/pub
-- [ ] Criar repositório em `github.com/bvicenzo/monart`
+- [x] Repositório criado em `github.com/bvicenzo/monart`
+- [x] MIT License
 - [ ] Estrutura de diretórios do pacote (`lib/src/`, `test/`, `example/`)
 - [ ] `pubspec.yaml` e `analysis_options.yaml`
 - [ ] Primeiro push para o GitHub
 
 ### Fase 1 — MVP (core)
-- [ ] `Result<Value, Error>` (sealed class) com `Success` e `Failure`
-- [ ] Métodos: `when`, `onSuccess`, `onFailure`, `andThen`, `orElse`, `map`, `mapError`
-- [ ] `ServiceBase<Value, Error>` com `run()`, `success()`, `failure()`, `check()`, `tryRun()`
-- [ ] Testes com a estrutura de árvore (cobertura > 90%)
+- [ ] `sealed class Result<Outcome extends Enum, Value>` com `Success` e `Failure`
+- [ ] Métodos: `when`, `onSuccess`, `onFailure`, `andThen`, `orElse`, `map`
+- [ ] `abstract class ServiceBase<Outcome extends Enum, Value>`
+- [ ] Helpers: `success()`, `failure()`, `check()`, `tryRun()`
+- [ ] Testes com estrutura de árvore (cobertura > 90%)
 - [ ] `analysis_options.yaml` configurado
 - [ ] README completo com exemplos
 
 ### Fase 2 — Async
-- [ ] Extensão `FutureResultX` para `Future<Result<Value, Error>>`
+- [ ] `typedef FutureResult<Outcome, Value>`
+- [ ] Extensão `FutureResultX` com `andThen`, `onSuccess`, `onFailure`
 - [ ] Testes async com a mesma estrutura de árvore
 
-### Fase 3 — Tags semânticas (paridade Ruby)
-- [ ] `TaggedSuccess` e `TaggedFailure` com `List<Object> tags`
-- [ ] `onSuccess(tag: ...)` e `onFailure(tag: ...)` para filtrar por tag
+### Fase 3 — Testing utilities
+- [ ] Matchers `isSuccess` e `isFailure` para `package:test`
+- [ ] Helpers para criação de results em testes
 
 ### Fase 4 — Publicação
 - [ ] Documentação `dart doc` em todos os membros públicos
@@ -754,17 +666,23 @@ dev_dependencies:
 
 ## 10. Decisões de Design
 
-**Por que `sealed class`?**
-Dart 3 suporta sealed classes com verificação exaustiva no `switch`. O compilador avisa se um `case` não for tratado.
+**Por que `Result<Outcome extends Enum, Value>` em vez de `Result<Value, Error>`?**
+Um único enum de `Outcome` por service cobre todos os desfechos possíveis — sucessos e falhas. Isso elimina a assimetria entre Success (sem tag) e Failure (com tag), e alinha com a filosofia do Ruby onde symbols cobrem ambos os casos. O compilador garante que todos os casos do enum sejam tratados no `switch`.
+
+**Por que `Failure` carrega `Value?` em vez de um tipo de erro separado?**
+O service é agnóstico de quem o chama. Ao carregar o mesmo objeto de domínio em Success e Failure, o caller decide como usar o contexto: um worker loga o outcome, um formulário mapeia os erros do objeto para campos específicos. A separação de responsabilidade fica no caller, não no service.
+
+**Por que `check` carrega `data` em ambos os caminhos?**
+Quando uma validação falha, o caller tem o contexto do que foi rejeitado — o email inválido, o nome ausente. Isso elimina a necessidade de o caller inferir o contexto a partir de mensagens de erro ou estruturas auxiliares.
 
 **Por que generics com nomes semânticos?**
-`Result<Value, Error>` comunica o propósito sem contexto adicional. `Result<S, F>` exige que o leitor mapeie mentalmente as letras para conceitos. Letras únicas são convenção da comunidade, não obrigação da linguagem.
+`Result<Outcome, Value>` comunica o propósito sem contexto adicional. Letras únicas são convenção da comunidade, não obrigação da linguagem.
 
 **Por que `require_trailing_commas` no linter?**
-É o mecanismo que garante automaticamente a formatação multiline — um argumento por linha, fechamento na própria linha. O `dart format` faz o trabalho. Equivalente aos cops `MultilineMethodCallBraceLayout`, `MultilineArrayBraceLayout` e `MultilineHashBraceLayout`.
+É o mecanismo que garante automaticamente a formatação multiline — um elemento por linha, fechamento na própria linha. Equivalente aos cops `MultilineMethodCallBraceLayout` e afins do rubocop.
 
 **Por que a árvore de testes espelha o fluxo do código?**
-Quando os testes refletem a estrutura de decisão do código — early returns nos grupos externos, caso feliz por último — qualquer mudança no código mapeia diretamente para uma mudança na árvore de testes. Isso torna a manutenção previsível e remove a desculpa de que "testes são difíceis de manter".
+Quando os testes refletem a estrutura de decisão do código — early returns nos grupos externos, caso feliz por último — qualquer mudança no código mapeia diretamente para uma mudança na árvore de testes. A manutenção deixa de ser difícil quando a estrutura existe.
 
 **Por que o nome `monart`?**
 O projeto tem identidade própria. `f_service` é apenas a inspiração conceitual.
