@@ -20,11 +20,11 @@ Todo nome — variável, parâmetro, tipo genérico — deve comunicar seu prop�
 
 ```dart
 // inadmissível
-final r = CreateUser(name: name, email: email).call();
+final r = UserCreateService(name: name, email: email).call();
 for (var i = 0; i < items.length; i++) { ... }
 
 // correto
-final registration = CreateUser(name: name, email: email).call();
+final registration = UserCreateService(name: name, email: email).call();
 for (final orderItem in order.items) { ... }
 ```
 
@@ -67,7 +67,7 @@ Cada método faz uma coisa. Se precisar de um comentário para explicar uma seç
 A vírgula final (`trailing comma`) aciona esse comportamento automaticamente no `dart format`:
 
 ```dart
-final registration = CreateUser(
+final registration = UserCreateService(
   name: name,
   email: email,
 ).call();
@@ -161,10 +161,10 @@ O `dart doc` exibe o primeiro parágrafo como sumário no índice. Ele deve ser 
 ///
 /// ```dart
 /// // each step only runs if the previous succeeded
-/// CreateUser(name: name, email: email)
+/// UserCreateService(name: name, email: email)
 ///     .call()                                          // Result<User>
-///     .andThen((user) => SendWelcomeEmail(user: user).call())  // Result<User>
-///     .andThen((user) => TrackSignup(userId: user.id).call()); // Result<User>
+///     .andThen((user) => UserSendWelcomeEmailService(user: user).call())  // Result<User>
+///     .andThen((user) => AnalyticsTrackSignupService(userId: user.id).call()); // Result<User>
 /// ```
 ///
 /// On failure, the outcome and context of the *first* failure are preserved:
@@ -183,7 +183,46 @@ Result<NextValue> andThen<NextValue>(
 ) => ...
 ```
 
-### 1.6 Elegância sobre verbosidade
+### 1.6 Nomenclatura de Services: `DomainActionService`
+
+Services seguem o padrão `Domain + Action + Service`, espelhando a convenção Ruby `Domain::ActionService`. O domínio vem primeiro — facilita descoberta por prefixo e mantém services relacionados agrupados no IDE e no sistema de arquivos.
+
+```
+Ruby                             Dart
+──────────────────────────────── ─────────────────────────────────
+User::CreateService              UserCreateService
+User::UpdateService              UserUpdateService
+User::ListService                UserListService
+User::DestroyService             UserDestroyService
+Order::FetchService              OrderFetchService
+Order::SyncStatusService         OrderSyncStatusService
+Analytics::TrackSignupService    AnalyticsTrackSignupService
+```
+
+A estrutura de arquivos espelha o namespace:
+
+```
+lib/src/services/
+├── user/
+│   ├── create_service.dart      → UserCreateService
+│   ├── update_service.dart      → UserUpdateService
+│   └── destroy_service.dart     → UserDestroyService
+└── order/
+    ├── fetch_service.dart       → OrderFetchService
+    └── sync_status_service.dart → OrderSyncStatusService
+```
+
+Na chamada, o `.call()` explícito preserva a filosofia de métodos nomeados. O `()` direto na instância também funciona (Dart resolve via `call()`), mas `.call()` comunica melhor a intenção:
+
+```dart
+// Ruby
+User::CreateService.(name: 'Alice', email: 'alice@test.com')
+
+// Dart
+UserCreateService(name: 'Alice', email: 'alice@test.com').call()
+```
+
+### 1.7 Elegância sobre verbosidade
 
 Quando a segurança em tempo de compilação exige construções tão verbosas que prejudicam a leitura, a elegância vence. Esta lib usa strings como outcome tags — o mesmo trade-off que o Ruby faz com symbols. Quem usa o service conhece seus outcomes; o compilador não precisa ser o guardião de tudo.
 
@@ -304,7 +343,7 @@ sealed class Result<Value> {
   /// Returns `this` so calls can be chained:
   ///
   /// ```dart
-  /// CreateUser(name: name, email: email)
+  /// UserCreateService(name: name, email: email)
   ///     .call()
   ///     .onSuccess((user) => logger.info('User created: ${user.id}'))
   ///     .onFailure((outcome, _) => logger.warn('Failed: $outcome'));
@@ -386,12 +425,12 @@ sealed class Result<Value> {
   /// untouched to the end:
   ///
   /// ```dart
-  /// CreateUser(name: name, email: email)
+  /// UserCreateService(name: name, email: email)
   ///     .call()
-  ///     .andThen((user) => SendWelcomeEmail(user: user).call())
-  ///     .andThen((user) => TrackSignup(userId: user.id).call());
-  /// // if CreateUser fails with 'nameRequired', SendWelcomeEmail and
-  /// // TrackSignup are never called — the final result is Failure('nameRequired', ...)
+  ///     .andThen((user) => UserSendWelcomeEmailService(user: user).call())
+  ///     .andThen((user) => AnalyticsTrackSignupService(userId: user.id).call());
+  /// // if UserCreateService fails with 'nameRequired', UserSendWelcomeEmailService and
+  /// // AnalyticsTrackSignupService are never called — the final result is Failure('nameRequired', ...)
   /// ```
   ///
   /// See also [orElse] to recover from a failure, and [run] for the idiomatic
@@ -409,9 +448,9 @@ sealed class Result<Value> {
   /// fallback, returning a default value, or converting a known error:
   ///
   /// ```dart
-  /// FetchFromApi(id: id)
+  /// OrderFetchFromApiService(id: id)
   ///     .call()
-  ///     .orElse((outcomes, _) => FetchFromCache(id: id).call())
+  ///     .orElse((outcomes, _) => OrderFetchFromCacheService(id: id).call())
   ///     .onSuccess((data) => render(data));
   /// ```
   ///
@@ -430,7 +469,7 @@ sealed class Result<Value> {
   /// into a presentation type without adding a new pipeline step:
   ///
   /// ```dart
-  /// CreateUser(name: name, email: email)
+  /// UserCreateService(name: name, email: email)
   ///     .call()
   ///     .map((user) => UserViewModel.from(user))
   ///     .onSuccess((viewModel) => renderProfile(viewModel));
@@ -485,8 +524,8 @@ final class Failure<Value> extends Result<Value> {
 /// [check], and [tryRun] inside [run] to produce results.
 ///
 /// ```dart
-/// class CreateUser extends ServiceBase<User> {
-///   const CreateUser({required this.name, required this.email});
+/// class UserCreateService extends ServiceBase<User> {
+///   const UserCreateService({required this.name, required this.email});
 ///
 ///   final String name;
 ///   final String email;
@@ -498,7 +537,7 @@ final class Failure<Value> extends Result<Value> {
 ///           .andThen((_) => _persistUser());
 /// }
 ///
-/// final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
+/// final registration = UserCreateService(name: 'Alice', email: 'alice@test.com').call();
 /// ```
 ///
 /// See also [Result], [Success], [Failure].
@@ -522,7 +561,7 @@ abstract class ServiceBase<Value> {
   /// The first [failure] in the chain short-circuits all remaining steps.
   Result<Value> run();
 
-  /// Invokes [run]. Allows calling the service like a function: `CreateUser(...).call()`.
+  /// Invokes [run]. Allows calling the service like a function: `UserCreateService(...).call()`.
   Result<Value> call() => run();
 
   /// Signals that this step of the service completed successfully.
@@ -638,8 +677,8 @@ abstract class ServiceBase<Value> {
 O `run()` lê como uma narrativa do fluxo de negócio. Early returns (validações) ficam no topo; o caso feliz é sempre o último.
 
 ```dart
-class CreateUser extends ServiceBase<User> {
-  const CreateUser({required this.name, required this.email});
+class UserCreateService extends ServiceBase<User> {
+  const UserCreateService({required this.name, required this.email});
 
   final String name;
   final String email;
@@ -727,7 +766,7 @@ extension FutureResultX<Value> on Future<Result<Value>> {
 `onSuccessOf` e `onFailureOf` aceitam uma string simples ou uma lista:
 
 ```dart
-CreateUser(name: 'Alice', email: 'alice@example.com')
+UserCreateService(name: 'Alice', email: 'alice@example.com')
     .call()
     .onSuccess((user) => print('Yey!'))
     .onSuccessOf('userCreated', (user) => redirectToDashboard(user))
@@ -758,7 +797,7 @@ Isso permite filtrar tanto por `'unprocessableContent'` quanto por `'clientError
 ### 4.2 O mesmo resultado, tratamentos diferentes por contexto
 
 ```dart
-final registration = CreateUser(name: 'Alice', email: 'alice@example.com').call();
+final registration = UserCreateService(name: 'Alice', email: 'alice@example.com').call();
 
 // In a worker — only the outcome matters
 registration.onFailure((outcome, _) => logger.warn('User creation failed: $outcome'));
@@ -785,10 +824,10 @@ switch (registration) {
 ### 4.4 Encadeamento de Services (Railway)
 
 ```dart
-final onboarding = CreateUser(name: 'Alice', email: 'alice@example.com')
+final onboarding = UserCreateService(name: 'Alice', email: 'alice@example.com')
     .call()
-    .andThen((registeredUser) => SendWelcomeEmail(user: registeredUser).call())
-    .andThen((registeredUser) => TrackSignup(userId: registeredUser.id).call())
+    .andThen((registeredUser) => UserSendWelcomeEmailService(user: registeredUser).call())
+    .andThen((registeredUser) => AnalyticsTrackSignupService(userId: registeredUser.id).call())
     .onSuccess((registeredUser) => print('Onboarding complete: ${registeredUser.name}'))
     .onFailure((outcome, context) => print('Onboarding failed at $outcome'));
 ```
@@ -796,8 +835,8 @@ final onboarding = CreateUser(name: 'Alice', email: 'alice@example.com')
 ### 4.5 Service Async
 
 ```dart
-class FetchOrder extends ServiceBase<Order> {
-  const FetchOrder({required this.orderId});
+class OrderFetchService extends ServiceBase<Order> {
+  const OrderFetchService({required this.orderId});
   final String orderId;
 
   @override
@@ -815,9 +854,9 @@ class FetchOrder extends ServiceBase<Order> {
       );
 }
 
-await FetchOrder(orderId: 'ord-123')
+await OrderFetchService(orderId: 'ord-123')
     .runAsync()
-    .andThen((fetchedOrder) => SyncOrderStatus(order: fetchedOrder).runAsync())
+    .andThen((fetchedOrder) => OrderSyncStatusService(order: fetchedOrder).runAsync())
     .onSuccessOf('orderFetched', (fetchedOrder) => print('Synced: ${fetchedOrder.id}'))
     .onFailureOf('timeout', (_) => print('Request timed out'))
     .onFailureOf('notFound', (_) => print('Order not found'))
@@ -880,27 +919,27 @@ group('Result', () {
 });
 ```
 
-### 5.3 Exemplo: `CreateUser` com validações em camadas
+### 5.3 Exemplo: `UserCreateService` com validações em camadas
 
 ```dart
-group('CreateUser', () {
+group('UserCreateService', () {
   group('#run', () {
     group('name', () {
       group('when name is not provided', () {
         test('requires name', () {
-          final registration = CreateUser(name: '', email: 'alice@test.com').call();
+          final registration = UserCreateService(name: '', email: 'alice@test.com').call();
           expect(registration.outcome, equals('nameRequired'));
         });
 
         test('carries the empty name as context', () {
-          final registration = CreateUser(name: '', email: 'alice@test.com').call();
+          final registration = UserCreateService(name: '', email: 'alice@test.com').call();
           expect(registration.context, equals(''));
         });
       });
 
       group('when name is provided', () {
         test('proceeds to next validation', () {
-          final registration = CreateUser(name: 'Alice', email: '').call();
+          final registration = UserCreateService(name: 'Alice', email: '').call();
           expect(registration.outcome, isNot(equals('nameRequired')));
         });
       });
@@ -909,7 +948,7 @@ group('CreateUser', () {
     group('email', () {
       group('when name is not provided', () {
         test('does not validate email', () {
-          final registration = CreateUser(name: '', email: 'notanemail').call();
+          final registration = UserCreateService(name: '', email: 'notanemail').call();
           expect(registration.outcome, isNot(equals('emailInvalid')));
         });
       });
@@ -917,19 +956,19 @@ group('CreateUser', () {
       group('when name is provided', () {
         group('and email has no @ character', () {
           test('requires valid email format', () {
-            final registration = CreateUser(name: 'Alice', email: 'notanemail').call();
+            final registration = UserCreateService(name: 'Alice', email: 'notanemail').call();
             expect(registration.outcome, equals('emailInvalid'));
           });
 
           test('carries the invalid email as context', () {
-            final registration = CreateUser(name: 'Alice', email: 'notanemail').call();
+            final registration = UserCreateService(name: 'Alice', email: 'notanemail').call();
             expect(registration.context, equals('notanemail'));
           });
         });
 
         group('and email has valid format', () {
           test('proceeds to user creation', () {
-            final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
+            final registration = UserCreateService(name: 'Alice', email: 'alice@test.com').call();
             expect(registration.outcome, isNot(equals('emailInvalid')));
           });
         });
@@ -938,7 +977,7 @@ group('CreateUser', () {
 
     group('when all attributes are valid', () {
       test('creates the user', () {
-        final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
+        final registration = UserCreateService(name: 'Alice', email: 'alice@test.com').call();
         expect(registration.outcome, equals('userCreated'));
         expect(registration.value?.name, equals('Alice'));
       });
