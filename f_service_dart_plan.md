@@ -79,7 +79,111 @@ final allowedStatuses = [
 ];
 ```
 
-### 1.5 Elegância sobre verbosidade
+### 1.5 Documentação que ensina, não que repete
+
+A documentação de um método não é uma legenda da assinatura. É uma janela para quem chega sem contexto — alguém que nunca viu a lib, que está lendo o autocomplete do IDE às 23h antes de um deploy. Essa pessoa precisa entender *por quê* o método existe, *quando* usá-lo, e *o que esperar* tanto quando dá certo quanto quando dá errado.
+
+#### O que não fazer — documentação Java clássica
+
+```dart
+/// Creates a [Failure] with a mandatory outcome tag and optional context.
+///
+/// @param outcomes The outcome tags.
+/// @param context The optional context.
+/// @return A [Failure] instance.
+Failure<Value> failure(Object? outcomes, [Object? context]) => ...
+```
+
+Isso não ensina nada. Qualquer pessoa que já viu a assinatura sabe tanto quanto quem leu essa doc.
+
+#### O que fazer — documentação que orienta
+
+```dart
+/// Signals that the service could not complete its work.
+///
+/// Use a single string for the common case, or a list when the result belongs
+/// to more than one semantic category — useful for HTTP-like layered errors:
+///
+/// ```dart
+/// // single outcome — the most common case
+/// return failure('saveFailed', user);
+///
+/// // multiple outcomes — caller can match either tag
+/// return failure(['unprocessableContent', 'clientError'], response);
+/// ```
+///
+/// The optional [context] carries whatever the caller needs to act on the
+/// failure. Pass the failing entity, the raw response, an error message —
+/// or omit it entirely when the outcome tag alone is enough:
+///
+/// ```dart
+/// // carry the invalid user so the caller can render field errors
+/// return failure('validationFailed', invalidUser);
+///
+/// // tag alone is sufficient
+/// return failure('unauthorized');
+/// ```
+///
+/// See also [success] for the happy path, [check] for inline validation,
+/// and [tryRun] for wrapping operations that may throw.
+Failure<Value> failure(Object? outcomes, [Object? context]) => ...
+```
+
+#### As regras
+
+**1. Primeira frase = intenção, não assinatura**
+Descreva o que o método *faz pelo chamador*, não o que ele *retorna*. `/// Signals that the service could not complete its work.` diz o papel semântico. `/// Creates a Failure` diz o que o compilador já diz.
+
+**2. Exemplos cobrem os dois caminhos**
+Para todo método que tem um caminho feliz e um triste, a doc mostra ambos. Isso é especialmente importante em `check`, `andThen`, `onSuccessOf` — onde o comportamento muda radicalmente dependendo do estado.
+
+**3. Parâmetros não-óbvios merecem prosa**
+`Object? context` não é auto-explicativo. `/// carries whatever the caller needs to act on the failure` orienta. `@param context The optional context` não orienta.
+
+**4. `See also` conecta o ecossistema**
+Todo método principal aponta para os vizinhos relevantes. `failure` aponta para `success`, `check`, `tryRun`. `andThen` aponta para `orElse`. Quem lê a doc de um método descobre os outros sem precisar vasculhar o índice.
+
+**5. Nada de afirmar o óbvio**
+`isSuccess` não precisa de doc — a assinatura já diz tudo. `andThen` precisa explicar o short-circuit. A régua é: *se um leitor atento já entende só pela assinatura, não documente*. Se há uma nuance de comportamento, documente.
+
+**6. O primeiro parágrafo sobrevive sozinho**
+O `dart doc` exibe o primeiro parágrafo como sumário no índice. Ele deve ser uma frase completa, densa de informação, sem precisar do resto da doc para fazer sentido.
+
+#### Exemplo completo: `andThen`
+
+```dart
+/// Chains the next step when this result is a success; short-circuits on failure.
+///
+/// This is the core composition primitive of Railway-Oriented Programming.
+/// Each step in the pipeline runs only if the previous one succeeded —
+/// the first failure short-circuits the entire chain, propagating its outcome
+/// and context untouched to the end.
+///
+/// ```dart
+/// // each step only runs if the previous succeeded
+/// CreateUser(name: name, email: email)
+///     .call()                                          // Result<User>
+///     .andThen((user) => SendWelcomeEmail(user: user).call())  // Result<User>
+///     .andThen((user) => TrackSignup(userId: user.id).call()); // Result<User>
+/// ```
+///
+/// On failure, the outcome and context of the *first* failure are preserved:
+///
+/// ```dart
+/// Failure('nameRequired', '')
+///     .andThen((_) => Success('emailValid', 'alice@test.com'))
+///     .andThen((_) => Success('userCreated', user));
+/// // => Failure('nameRequired', '') — the chain stopped at the first step
+/// ```
+///
+/// See also [orElse] to recover from a failure, and [run] for the idiomatic
+/// way to compose a full service pipeline.
+Result<NextValue> andThen<NextValue>(
+  Result<NextValue> Function(Value value) nextStep,
+) => ...
+```
+
+### 1.6 Elegância sobre verbosidade
 
 Quando a segurança em tempo de compilação exige construções tão verbosas que prejudicam a leitura, a elegância vence. Esta lib usa strings como outcome tags — o mesmo trade-off que o Ruby faz com symbols. Quem usa o service conhece seus outcomes; o compilador não precisa ser o guardião de tudo.
 
@@ -145,10 +249,27 @@ O `outcomes` é uma `List<String>` — um resultado pode carregar mais de um ró
 ```dart
 // lib/src/result/result.dart
 
+/// The outcome of a service operation — either a [Success] carrying a typed
+/// value, or a [Failure] carrying optional context.
+///
+/// Results are never thrown; they are returned and composed. Use [andThen] to
+/// chain steps, [onSuccessOf]/[onFailureOf] to react to specific outcomes, and
+/// [when] when exhaustive handling is required.
+///
+/// See [ServiceBase] for the idiomatic way to produce results inside a service.
 sealed class Result<Value> {
   const Result(this.outcomes);
 
-  /// All outcome tags for this result.
+  /// All outcome tags carried by this result.
+  ///
+  /// Most results carry a single tag — use [outcome] as a shortcut.
+  /// Multiple tags express layered semantics without creating artificial
+  /// composite outcomes:
+  ///
+  /// ```dart
+  /// failure(['unprocessableContent', 'clientError'], response)
+  ///     .outcomes; // ['unprocessableContent', 'clientError']
+  /// ```
   final List<String> outcomes;
 
   /// The primary outcome tag. Shortcut for `outcomes.first`.
@@ -157,17 +278,19 @@ sealed class Result<Value> {
   bool get isSuccess => this is Success<Value>;
   bool get isFailure => this is Failure<Value>;
 
-  Value? get value => switch (this) {
-    Success(:final value) => value,
-    Failure()             => null,
-  };
-
-  Object? get context => switch (this) {
-    Success()               => null,
-    Failure(:final context) => context,
-  };
-
-  /// Forces handling of both cases. The compiler warns if any case is missing.
+  /// Forces exhaustive handling of both the success and failure cases.
+  ///
+  /// Unlike [onSuccess]/[onFailure] — which are fire-and-forget side effects —
+  /// [when] produces a value and the compiler warns if either branch is missing:
+  ///
+  /// ```dart
+  /// final message = registration.when(
+  ///   success: (outcomes, user)     => 'Welcome, ${user.name}!',
+  ///   failure: (outcomes, context)  => 'Registration failed: ${outcomes.first}',
+  /// );
+  /// ```
+  ///
+  /// See also [onSuccess], [onFailure] for chainable side-effect handlers.
   Output when<Output>({
     required Output Function(List<String> outcomes, Value value) success,
     required Output Function(List<String> outcomes, Object? context) failure,
@@ -176,14 +299,35 @@ sealed class Result<Value> {
     Failure(:final context) => failure(outcomes, context),
   };
 
-  /// Handles all successes.
+  /// Runs [fn] if this is a success; does nothing on failure.
+  ///
+  /// Returns `this` so calls can be chained:
+  ///
+  /// ```dart
+  /// CreateUser(name: name, email: email)
+  ///     .call()
+  ///     .onSuccess((user) => logger.info('User created: ${user.id}'))
+  ///     .onFailure((outcome, _) => logger.warn('Failed: $outcome'));
+  /// ```
+  ///
+  /// To react only to specific outcomes, use [onSuccessOf].
   Result<Value> onSuccess(void Function(Value value) fn) {
     if (this case Success(:final value)) fn(value);
     return this;
   }
 
-  /// Handles successes whose outcomes intersect with [matchOutcomes].
-  /// Accepts a single [String] or a [List<String>].
+  /// Runs [fn] if this is a success *and* its outcomes intersect with [matchOutcomes].
+  ///
+  /// [matchOutcomes] accepts a single [String] or a [List<String>]:
+  ///
+  /// ```dart
+  /// registration
+  ///     .onSuccessOf('userCreated', (user) => redirectToDashboard(user))
+  ///     .onSuccessOf(['userCreated', 'userUpdated'], (user) => notifyAdmin(user));
+  /// ```
+  ///
+  /// Non-matching successes pass through unchanged; failures are always ignored.
+  /// For a catch-all success handler, use [onSuccess].
   Result<Value> onSuccessOf(
     Object? matchOutcomes,
     void Function(Value value) fn,
@@ -194,14 +338,36 @@ sealed class Result<Value> {
     return this;
   }
 
-  /// Handles all failures. Receives the primary outcome and context.
+  /// Runs [fn] if this is a failure, passing the primary outcome and context.
+  ///
+  /// Use this as the final catch-all after any specific [onFailureOf] handlers:
+  ///
+  /// ```dart
+  /// registration
+  ///     .onFailureOf('nameRequired', (_) => nameField.showError())
+  ///     .onFailureOf('emailInvalid', (email) => emailField.showError('$email is invalid'))
+  ///     .onFailure((outcome, _) => logger.error('Unexpected failure: $outcome'));
+  /// ```
+  ///
+  /// To react only to specific outcomes, use [onFailureOf].
   Result<Value> onFailure(void Function(String outcome, Object? context) fn) {
     if (this case Failure(:final context)) fn(outcome, context);
     return this;
   }
 
-  /// Handles failures whose outcomes intersect with [matchOutcomes].
-  /// Accepts a single [String] or a [List<String>].
+  /// Runs [fn] if this is a failure *and* its outcomes intersect with [matchOutcomes].
+  ///
+  /// [matchOutcomes] accepts a single [String] or a [List<String>]:
+  ///
+  /// ```dart
+  /// httpResult
+  ///     .onFailureOf('unauthorized', (_) => redirectToLogin())
+  ///     .onFailureOf(['badGateway', 'internalServerError'], (_) => showRetryBanner())
+  ///     .onFailure((outcome, _) => logger.error('Unhandled: $outcome'));
+  /// ```
+  ///
+  /// Non-matching failures pass through unchanged; successes are always ignored.
+  /// For a catch-all failure handler, use [onFailure].
   Result<Value> onFailureOf(
     Object? matchOutcomes,
     void Function(Object? context) fn,
@@ -212,8 +378,24 @@ sealed class Result<Value> {
     return this;
   }
 
-  /// Runs the next step if successful; short-circuits on failure,
-  /// propagating all outcome tags.
+  /// Chains the next step when this result is a success; short-circuits on failure.
+  ///
+  /// This is the core composition primitive of Railway-Oriented Programming.
+  /// Each step runs only if the previous one succeeded — the first failure
+  /// short-circuits the entire chain, propagating its outcomes and context
+  /// untouched to the end:
+  ///
+  /// ```dart
+  /// CreateUser(name: name, email: email)
+  ///     .call()
+  ///     .andThen((user) => SendWelcomeEmail(user: user).call())
+  ///     .andThen((user) => TrackSignup(userId: user.id).call());
+  /// // if CreateUser fails with 'nameRequired', SendWelcomeEmail and
+  /// // TrackSignup are never called — the final result is Failure('nameRequired', ...)
+  /// ```
+  ///
+  /// See also [orElse] to recover from a failure, and [run] for the idiomatic
+  /// pipeline pattern inside a service.
   Result<NextValue> andThen<NextValue>(
     Result<NextValue> Function(Value value) nextStep,
   ) => switch (this) {
@@ -221,7 +403,20 @@ sealed class Result<Value> {
     Failure(:final context) => Failure(outcomes, context),
   };
 
-  /// Recovers from a failure; ignored if already successful.
+  /// Recovers from a failure by producing a new result; ignored if already successful.
+  ///
+  /// Use this when a failure is expected and handleable — retrying with a
+  /// fallback, returning a default value, or converting a known error:
+  ///
+  /// ```dart
+  /// FetchFromApi(id: id)
+  ///     .call()
+  ///     .orElse((outcomes, _) => FetchFromCache(id: id).call())
+  ///     .onSuccess((data) => render(data));
+  /// ```
+  ///
+  /// If recovery itself returns a [Failure], that failure propagates forward.
+  /// See also [andThen] for chaining forward on success.
   Result<Value> orElse(
     Result<Value> Function(List<String> outcomes, Object? context) recovery,
   ) => switch (this) {
@@ -229,6 +424,17 @@ sealed class Result<Value> {
     Failure(:final context) => recovery(outcomes, context),
   };
 
+  /// Transforms the success value without changing the outcome tags.
+  ///
+  /// Failures pass through unchanged. Useful for projecting a service result
+  /// into a presentation type without adding a new pipeline step:
+  ///
+  /// ```dart
+  /// CreateUser(name: name, email: email)
+  ///     .call()
+  ///     .map((user) => UserViewModel.from(user))
+  ///     .onSuccess((viewModel) => renderProfile(viewModel));
+  /// ```
   Result<MappedValue> map<MappedValue>(
     MappedValue Function(Value value) transform,
   ) => switch (this) {
@@ -271,26 +477,109 @@ final class Failure<Value> extends Result<Value> {
 ```dart
 // lib/src/service/service_base.dart
 
+/// Base class for service objects that follow the Railway-Oriented Programming
+/// pattern.
+///
+/// Subclass [ServiceBase] and override [run] to implement a business operation
+/// that always returns a [Result] — never throws. Use [success], [failure],
+/// [check], and [tryRun] inside [run] to produce results.
+///
+/// ```dart
+/// class CreateUser extends ServiceBase<User> {
+///   const CreateUser({required this.name, required this.email});
+///
+///   final String name;
+///   final String email;
+///
+///   @override
+///   Result<User> run() =>
+///       _requireName()
+///           .andThen((_) => _requireEmail())
+///           .andThen((_) => _persistUser());
+/// }
+///
+/// final registration = CreateUser(name: 'Alice', email: 'alice@test.com').call();
+/// ```
+///
+/// See also [Result], [Success], [Failure].
 abstract class ServiceBase<Value> {
   const ServiceBase();
 
-  /// Implements the business logic. Must return either [Success] or [Failure].
+  /// Implements the business logic as a pipeline of steps.
+  ///
+  /// Structure [run] as a chain of [andThen] calls: early returns (validations)
+  /// at the top, the happy path last. Each private method carries a single
+  /// responsibility and an explicit return type:
+  ///
+  /// ```dart
+  /// @override
+  /// Result<User> run() =>
+  ///     _requireName()
+  ///         .andThen((_) => _requireEmail())
+  ///         .andThen((_) => _persistUser());
+  /// ```
+  ///
+  /// The first [failure] in the chain short-circuits all remaining steps.
   Result<Value> run();
 
-  /// Runs the service.
+  /// Invokes [run]. Allows calling the service like a function: `CreateUser(...).call()`.
   Result<Value> call() => run();
 
-  /// Creates a [Success]. [outcomes] accepts a [String] or [List<String>].
+  /// Signals that this step of the service completed successfully.
+  ///
+  /// [outcomes] accepts a single [String] or a [List<String>] when the result
+  /// belongs to more than one semantic category:
+  ///
+  /// ```dart
+  /// // single outcome — the common case
+  /// return success('userCreated', newUser);
+  ///
+  /// // multiple outcomes — useful for HTTP-like layered semantics
+  /// return success(['ok', 'created'], response);
+  /// ```
+  ///
+  /// See also [failure] for the error path, [check] for inline validation.
   Success<Value> success(Object? outcomes, Value value) =>
       Success(outcomes, value);
 
-  /// Creates a [Failure]. [outcomes] accepts a [String] or [List<String>].
+  /// Signals that the service could not complete its work.
+  ///
+  /// [outcomes] accepts a single [String] or a [List<String>]. The optional
+  /// [context] carries whatever the caller needs to act on the failure:
+  ///
+  /// ```dart
+  /// // carry the invalid entity so the caller can render field errors
+  /// return failure('validationFailed', invalidUser);
+  ///
+  /// // multiple outcomes with a raw HTTP response as context
+  /// return failure(['unprocessableContent', 'clientError'], response);
+  ///
+  /// // outcome tag alone is enough
+  /// return failure('unauthorized');
+  /// ```
+  ///
+  /// See also [success] for the happy path, [check] for inline validation,
+  /// [tryRun] for wrapping operations that may throw.
   Failure<Value> failure(Object? outcomes, [Object? context]) =>
       Failure(outcomes, context);
 
-  /// Validates a condition. Carries [data] on both [Success] and [Failure].
-  /// [condition] is the SUCCESS predicate — true means valid.
-  /// [outcomes] accepts a [String] or [List<String>].
+  /// Validates a condition inline, carrying [data] on both paths.
+  ///
+  /// [condition] is the **success predicate** — return `true` when valid.
+  /// On success, [data] is the value. On failure, [data] is the context.
+  /// This means the caller always has the validated object available, whether
+  /// the check passed or not:
+  ///
+  /// ```dart
+  /// Result<String> _requireEmail() =>
+  ///     check('emailInvalid', email, () => email.contains('@'));
+  /// // Success('emailInvalid', 'alice@test.com')  — when valid
+  /// // Failure('emailInvalid', 'notanemail')       — when invalid, email is the context
+  /// ```
+  ///
+  /// Because the result is a `Result<CheckedValue>` and not `Result<Value>`,
+  /// chain it into [run] using `andThen((_) => nextStep())` to discard the
+  /// intermediate value and continue the pipeline.
   Result<CheckedValue> check<CheckedValue>(
     Object? outcomes,
     CheckedValue data,
@@ -299,8 +588,34 @@ abstract class ServiceBase<Value> {
       ? Success(outcomes, data)
       : Failure(outcomes, data);
 
-  /// Runs an operation and wraps any thrown exception as a [Failure].
-  /// [outcomes] accepts a [String] or [List<String>].
+  /// Runs [operation] and wraps any thrown exception as a [Failure].
+  ///
+  /// Use this to call external APIs, repositories, or any code that may throw,
+  /// keeping the service pipeline free of try/catch:
+  ///
+  /// ```dart
+  /// Result<Order> _fetchOrder() =>
+  ///     tryRun(
+  ///       'orderFetched',
+  ///       () => orderRepository.findById(orderId),
+  ///     );
+  /// ```
+  ///
+  /// Provide [onException] to convert the caught exception into a meaningful
+  /// context or to map it to a different outcome:
+  ///
+  /// ```dart
+  /// Result<Order> _fetchOrder() =>
+  ///     tryRun(
+  ///       'orderFetched',
+  ///       () => orderRepository.findById(orderId),
+  ///       onException: (exception, _) => switch (exception) {
+  ///         NotFoundException() => 'notFound',
+  ///         TimeoutException()  => 'timeout',
+  ///         _                  => null,  // falls back to the raw exception
+  ///       },
+  ///     );
+  /// ```
   Result<Value> tryRun(
     Object? outcomes,
     Value Function() operation, {
