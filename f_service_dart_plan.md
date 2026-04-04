@@ -121,17 +121,38 @@ monart/
 
 ## 3. Design da API
 
-### 3.1 `Result<Value>` — O coração da lib
+### 3.1 `_toOutcomes` — Normalizador interno
 
-O outcome é uma `String` — leve, legível, próximo dos symbols do Ruby. O `Value` é o payload tipado, presente em `Success` e opcionalmente em `Failure` (como contexto não tipado, pois o caller sabe o que esperar de cada outcome).
+Inspirado no padrão `safeList`, converte qualquer entrada para `List<String>`. Função privada da biblioteca — não exportada. Mantém a elegância da chamada com string simples sem abrir mão do suporte à lista.
+
+```dart
+// lib/src/result/result.dart (top-level, private)
+
+List<String> _toOutcomes(Object? outcomes) => switch (outcomes) {
+  List<String> list => list,
+  String single     => [single],
+  null              => [],
+  _                 => throw ArgumentError(
+      'outcomes must be a String or List<String>, got ${outcomes.runtimeType}',
+    ),
+};
+```
+
+### 3.2 `Result<Value>` — O coração da lib
+
+O `outcomes` é uma `List<String>` — um resultado pode carregar mais de um rótulo, como uma resposta HTTP que é ao mesmo tempo `unprocessableContent` e `clientError`. O getter `outcome` retorna `outcomes.first` para o caso comum de outcome único. O `Value` é o payload tipado do `Success`; o `Failure` carrega `Object?` como contexto opcional.
 
 ```dart
 // lib/src/result/result.dart
 
 sealed class Result<Value> {
-  const Result(this.outcome);
+  const Result(this.outcomes);
 
-  final String outcome;
+  /// All outcome tags for this result.
+  final List<String> outcomes;
+
+  /// The primary outcome tag. Shortcut for `outcomes.first`.
+  String get outcome => outcomes.first;
 
   bool get isSuccess => this is Success<Value>;
   bool get isFailure => this is Failure<Value>;
@@ -142,17 +163,17 @@ sealed class Result<Value> {
   };
 
   Object? get context => switch (this) {
-    Success()             => null,
+    Success()               => null,
     Failure(:final context) => context,
   };
 
   /// Forces handling of both cases. The compiler warns if any case is missing.
   Output when<Output>({
-    required Output Function(String outcome, Value value) success,
-    required Output Function(String outcome, Object? context) failure,
+    required Output Function(List<String> outcomes, Value value) success,
+    required Output Function(List<String> outcomes, Object? context) failure,
   }) => switch (this) {
-    Success(:final value)   => success(outcome, value),
-    Failure(:final context) => failure(outcome, context),
+    Success(:final value)   => success(outcomes, value),
+    Failure(:final context) => failure(outcomes, context),
   };
 
   /// Handles all successes.
@@ -161,74 +182,91 @@ sealed class Result<Value> {
     return this;
   }
 
-  /// Handles successes with specific outcomes.
-  Result<Value> onSuccessOf(Set<String> outcomes, void Function(Value value) fn) {
-    if (this case Success(:final value) when outcomes.contains(outcome)) fn(value);
+  /// Handles successes whose outcomes intersect with [matchOutcomes].
+  /// Accepts a single [String] or a [List<String>].
+  Result<Value> onSuccessOf(
+    Object? matchOutcomes,
+    void Function(Value value) fn,
+  ) {
+    final targets = _toOutcomes(matchOutcomes);
+    if (this case Success(:final value)
+        when outcomes.any(targets.contains)) fn(value);
     return this;
   }
 
-  /// Handles all failures.
+  /// Handles all failures. Receives the primary outcome and context.
   Result<Value> onFailure(void Function(String outcome, Object? context) fn) {
     if (this case Failure(:final context)) fn(outcome, context);
     return this;
   }
 
-  /// Handles failures with specific outcomes.
-  Result<Value> onFailureOf(Set<String> outcomes, void Function(Object? context) fn) {
-    if (this case Failure(:final context) when outcomes.contains(outcome)) fn(context);
+  /// Handles failures whose outcomes intersect with [matchOutcomes].
+  /// Accepts a single [String] or a [List<String>].
+  Result<Value> onFailureOf(
+    Object? matchOutcomes,
+    void Function(Object? context) fn,
+  ) {
+    final targets = _toOutcomes(matchOutcomes);
+    if (this case Failure(:final context)
+        when outcomes.any(targets.contains)) fn(context);
     return this;
   }
 
-  /// Runs the next step if successful; short-circuits on failure.
+  /// Runs the next step if successful; short-circuits on failure,
+  /// propagating all outcome tags.
   Result<NextValue> andThen<NextValue>(
     Result<NextValue> Function(Value value) nextStep,
   ) => switch (this) {
     Success(:final value)   => nextStep(value),
-    Failure(:final context) => Failure(outcome, context),
+    Failure(:final context) => Failure(outcomes, context),
   };
 
   /// Recovers from a failure; ignored if already successful.
   Result<Value> orElse(
-    Result<Value> Function(String outcome, Object? context) recovery,
+    Result<Value> Function(List<String> outcomes, Object? context) recovery,
   ) => switch (this) {
     Success()               => this,
-    Failure(:final context) => recovery(outcome, context),
+    Failure(:final context) => recovery(outcomes, context),
   };
 
   Result<MappedValue> map<MappedValue>(
     MappedValue Function(Value value) transform,
   ) => switch (this) {
-    Success(:final value)   => Success(outcome, transform(value)),
-    Failure(:final context) => Failure(outcome, context),
+    Success(:final value)   => Success(outcomes, transform(value)),
+    Failure(:final context) => Failure(outcomes, context),
   };
 }
 ```
 
-### 3.2 `Success<Value>` e `Failure<Value>`
+### 3.3 `Success<Value>` e `Failure<Value>`
+
+Os construtores aceitam `Object?` — normalizado via `_toOutcomes`. Isso permite tanto `Success('userCreated', user)` (string simples) quanto `Success(['ok', 'created'], user)` (lista) sem precisar do helper de `ServiceBase`.
 
 ```dart
 // lib/src/result/success.dart
 final class Success<Value> extends Result<Value> {
-  const Success(super.outcome, this.value);
+  Success(Object? outcomes, this.value) : super(_toOutcomes(outcomes));
 
   final Value value;
 
   @override
-  String toString() => 'Success($outcome, $value)';
+  String toString() => 'Success($outcomes, $value)';
 }
 
 // lib/src/result/failure.dart
 final class Failure<Value> extends Result<Value> {
-  const Failure(super.outcome, [this.context]);
+  Failure(Object? outcomes, [this.context]) : super(_toOutcomes(outcomes));
 
   final Object? context;  // optional — caller casts as needed for each outcome
 
   @override
-  String toString() => 'Failure($outcome, $context)';
+  String toString() => 'Failure($outcomes, $context)';
 }
 ```
 
-### 3.3 `ServiceBase<Value>` — Classe Base dos Services
+> **Nota:** Os construtores não são `const` porque `_toOutcomes` é chamado na inicialização. Para services — que rodam em runtime — isso não é uma limitação.
+
+### 3.4 `ServiceBase<Value>` — Classe Base dos Services
 
 ```dart
 // lib/src/service/service_base.dart
@@ -242,38 +280,45 @@ abstract class ServiceBase<Value> {
   /// Runs the service.
   Result<Value> call() => run();
 
-  /// Creates a [Success] with a mandatory outcome tag and value.
-  Success<Value> success(String outcome, Value value) => Success(outcome, value);
+  /// Creates a [Success]. [outcomes] accepts a [String] or [List<String>].
+  Success<Value> success(Object? outcomes, Value value) =>
+      Success(outcomes, value);
 
-  /// Creates a [Failure] with a mandatory outcome tag and optional context.
-  Failure<Value> failure(String outcome, [Object? context]) => Failure(outcome, context);
+  /// Creates a [Failure]. [outcomes] accepts a [String] or [List<String>].
+  Failure<Value> failure(Object? outcomes, [Object? context]) =>
+      Failure(outcomes, context);
 
   /// Validates a condition. Carries [data] on both [Success] and [Failure].
   /// [condition] is the SUCCESS predicate — true means valid.
+  /// [outcomes] accepts a [String] or [List<String>].
   Result<CheckedValue> check<CheckedValue>(
-    String outcome,
+    Object? outcomes,
     CheckedValue data,
     bool Function() condition,
   ) => condition()
-      ? Success(outcome, data)
-      : Failure(outcome, data);
+      ? Success(outcomes, data)
+      : Failure(outcomes, data);
 
   /// Runs an operation and wraps any thrown exception as a [Failure].
+  /// [outcomes] accepts a [String] or [List<String>].
   Result<Value> tryRun(
-    String outcome,
+    Object? outcomes,
     Value Function() operation, {
     Object? Function(Object exception, StackTrace stack)? onException,
   }) {
     try {
-      return Success(outcome, operation());
+      return Success(outcomes, operation());
     } catch (exception, stack) {
-      return Failure(outcome, onException?.call(exception, stack) ?? exception);
+      return Failure(
+        outcomes,
+        onException?.call(exception, stack) ?? exception,
+      );
     }
   }
 }
 ```
 
-### 3.4 O padrão `run()` como pipeline
+### 3.5 O padrão `run()` como pipeline
 
 O `run()` lê como uma narrativa do fluxo de negócio. Early returns (validações) ficam no topo; o caso feliz é sempre o último.
 
@@ -305,7 +350,7 @@ class CreateUser extends ServiceBase<User> {
 }
 ```
 
-### 3.5 Suporte a `async` — `FutureResult<Value>`
+### 3.6 Suporte a `async` — `FutureResult<Value>`
 
 ```dart
 // lib/src/extensions/future_result_extension.dart
@@ -319,7 +364,7 @@ extension FutureResultX<Value> on Future<Result<Value>> {
     (currentResult) => switch (currentResult) {
       Success(:final value)   => nextStep(value),
       Failure(:final context) => Future.value(
-          Failure(currentResult.outcome, context),
+          Failure(currentResult.outcomes, context),
         ),
     },
   );
@@ -329,11 +374,15 @@ extension FutureResultX<Value> on Future<Result<Value>> {
         if (currentResult case Success(:final value)) fn(value);
       });
 
-  Future<void> onSuccessOf(Set<String> outcomes, void Function(Value value) fn) =>
-      then((currentResult) {
-        if (currentResult case Success(:final value)
-            when outcomes.contains(currentResult.outcome)) fn(value);
-      });
+  /// [matchOutcomes] accepts a [String] or [List<String>].
+  Future<void> onSuccessOf(
+    Object? matchOutcomes,
+    void Function(Value value) fn,
+  ) => then((currentResult) {
+    final targets = _toOutcomes(matchOutcomes);
+    if (currentResult case Success(:final value)
+        when currentResult.outcomes.any(targets.contains)) fn(value);
+  });
 
   Future<void> onFailure(void Function(String outcome, Object? context) fn) =>
       then((currentResult) {
@@ -342,11 +391,15 @@ extension FutureResultX<Value> on Future<Result<Value>> {
         }
       });
 
-  Future<void> onFailureOf(Set<String> outcomes, void Function(Object? context) fn) =>
-      then((currentResult) {
-        if (currentResult case Failure(:final context)
-            when outcomes.contains(currentResult.outcome)) fn(context);
-      });
+  /// [matchOutcomes] accepts a [String] or [List<String>].
+  Future<void> onFailureOf(
+    Object? matchOutcomes,
+    void Function(Object? context) fn,
+  ) => then((currentResult) {
+    final targets = _toOutcomes(matchOutcomes);
+    if (currentResult case Failure(:final context)
+        when currentResult.outcomes.any(targets.contains)) fn(context);
+  });
 }
 ```
 
@@ -356,15 +409,36 @@ extension FutureResultX<Value> on Future<Result<Value>> {
 
 ### 4.1 Tratamento granular por outcome
 
+`onSuccessOf` e `onFailureOf` aceitam uma string simples ou uma lista:
+
 ```dart
 CreateUser(name: 'Alice', email: 'alice@example.com')
     .call()
     .onSuccess((user) => print('Yey!'))
-    .onSuccessOf({'userCreated'}, (user) => redirectToDashboard(user))
-    .onFailureOf({'nameRequired'}, (_) => print('Name must be informed'))
-    .onFailureOf({'emailInvalid'}, (email) => print('Email $email must be valid'))
+    .onSuccessOf('userCreated', (user) => redirectToDashboard(user))
+    .onFailureOf('nameRequired', (_) => print('Name must be informed'))
+    .onFailureOf('emailInvalid', (email) => print('Email $email must be valid'))
     .onFailure((outcome, context) => print('Unknown error $outcome: $context'));
 ```
+
+Agrupando outcomes relacionados numa única chamada:
+
+```dart
+FetchData(url: url)
+    .call()
+    .onSuccessOf(['ok', 'fromCache'], (response) => render(response.body))
+    .onFailureOf(['badGateway', 'internalServerError'], (_) => showRetryBanner())
+    .onFailureOf('unauthorized', (_) => redirectToLogin())
+    .onFailure((outcome, _) => logger.error('Unhandled outcome: $outcome'));
+```
+
+Um resultado pode carregar múltiplos outcomes — por exemplo, uma resposta HTTP que é ao mesmo tempo uma falha de cliente e um conteúdo não processável:
+
+```dart
+failure(['unprocessableContent', 'clientError'], response)
+```
+
+Isso permite filtrar tanto por `'unprocessableContent'` quanto por `'clientError'` em chamadas separadas.
 
 ### 4.2 O mesmo resultado, tratamentos diferentes por contexto
 
@@ -375,7 +449,7 @@ final registration = CreateUser(name: 'Alice', email: 'alice@example.com').call(
 registration.onFailure((outcome, _) => logger.warn('User creation failed: $outcome'));
 
 // In a form — the context object maps errors to fields
-registration.onFailureOf({'saveFailed'}, (context) {
+registration.onFailureOf('saveFailed', (context) {
   final failedUser = context as User;
   nameField.error = failedUser.errors['name'];
   emailField.error = failedUser.errors['email'];
@@ -386,10 +460,10 @@ registration.onFailureOf({'saveFailed'}, (context) {
 
 ```dart
 switch (registration) {
-  case Success(:final outcome, :final value):
-    print('$outcome: ${value.name}');
-  case Failure(:final outcome, :final context):
-    print('$outcome: $context');
+  case Success(:final outcomes, :final value):
+    print('${outcomes.first}: ${value.name}');
+  case Failure(:final outcomes, :final context):
+    print('${outcomes.first}: $context');
 }
 ```
 
@@ -429,9 +503,9 @@ class FetchOrder extends ServiceBase<Order> {
 await FetchOrder(orderId: 'ord-123')
     .runAsync()
     .andThen((fetchedOrder) => SyncOrderStatus(order: fetchedOrder).runAsync())
-    .onSuccessOf({'orderFetched'}, (fetchedOrder) => print('Synced: ${fetchedOrder.id}'))
-    .onFailureOf({'timeout'}, (_) => print('Request timed out'))
-    .onFailureOf({'notFound'}, (_) => print('Order not found'))
+    .onSuccessOf('orderFetched', (fetchedOrder) => print('Synced: ${fetchedOrder.id}'))
+    .onFailureOf('timeout', (_) => print('Request timed out'))
+    .onFailureOf('notFound', (_) => print('Order not found'))
     .onFailure((outcome, context) => print('Unexpected: $outcome'));
 ```
 
@@ -647,9 +721,10 @@ dev_dependencies:
 | `and_then { \|v\| }`                    | `.andThen((value) => ...)`                         |
 | `catch { \|e\| }`                       | `.orElse((outcome, context) => ...)`               |
 | `on_success { \|v\| }`                  | `.onSuccess((value) { ... })`                      |
-| `on_success(:tag) { \|v\| }`            | `.onSuccessOf({'tag'}, (value) { ... })`           |
+| `on_success(:tag) { \|v\| }`            | `.onSuccessOf('tag', (value) { ... })`             |
+| `on_success(:a, :b) { \|v\| }`          | `.onSuccessOf(['a', 'b'], (value) { ... })`        |
 | `on_failure { \|e, t\| }`               | `.onFailure((outcome, context) { ... })`           |
-| `on_failure(:a, :b) { \|e\| }`          | `.onFailureOf({'a', 'b'}, (context) { ... })`      |
+| `on_failure(:a, :b) { \|e\| }`          | `.onFailureOf(['a', 'b'], (context) { ... })`      |
 | `Try(:type) { block }`                   | `tryRun('type', () => block)`                      |
 | Ruby symbols como outcome tags           | `String` — mesma filosofia, mesmos trade-offs      |
 | `.rubocop.yml`                           | `analysis_options.yaml`                            |
@@ -705,6 +780,9 @@ O outcome (string) cobre todos os desfechos — sucessos e falhas. O `Value` é 
 
 **Por que `onSuccessOf` e `onFailureOf` com outcomes antes do callback?**
 Os outcomes funcionam como filtro/seletor — o "o quê" vem antes do "o que fazer", igual ao Ruby. Dois métodos separados (`onSuccess`/`onSuccessOf`) evitam parâmetros opcionais que inverteriam a ordem natural.
+
+**Por que `outcomes` é `List<String>` e não `String`?**
+Um resultado pode carregar múltiplos rótulos — `failure(['unprocessableContent', 'clientError'], response)` é mais expressivo e evita criação de outcomes compostos artificiais. `_toOutcomes` normaliza `String | List<String>` → `List<String>`, mantendo a chamada simples no caso comum (`success('userCreated', user)`) e permitindo agrupamento quando necessário. O getter `outcome` (= `outcomes.first`) preserva a conveniência do caso único.
 
 **Por que `check` carrega `data` em ambos os caminhos?**
 O caller sempre tem contexto do que foi validado. O email inválido fica disponível na failure — seja para exibir na UI, logar ou ignorar.
