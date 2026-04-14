@@ -89,11 +89,11 @@ UserCreateService(name: 'Alice', email: 'alice@example.com')
 Every service operation returns a `Result<Value>` — either a `Success` carrying a typed value, or a `Failure` carrying optional context. Results are never thrown; they are returned and composed.
 
 ```dart
-final result = UserCreateService(name: 'Alice', email: 'alice@example.com').call();
+final registration = UserCreateService(name: 'Alice', email: 'alice@example.com').call();
 
-result.isSuccess; // true
-result.outcome;   // 'userCreated'
-result.value;     // User(name: 'Alice', ...)
+registration.isSuccess; // true
+registration.outcome;   // 'userCreated'
+registration.value;     // User(name: 'Alice', ...)
 ```
 
 #### Reacting to outcomes
@@ -101,7 +101,7 @@ result.value;     // User(name: 'Alice', ...)
 `onSuccess` and `onFailure` are fire-and-forget side effects. They return `this`, so calls can be chained:
 
 ```dart
-result
+registration
     .onSuccess((user) => print('Welcome, ${user.name}!'))
     .onFailure((outcome, _) => logger.warn('Failed: $outcome'));
 ```
@@ -133,7 +133,7 @@ FetchDataService(url: url)
 When you need a value from both branches, `when` forces you to handle both:
 
 ```dart
-final message = result.when(
+final message = registration.when(
   success: (outcomes, user)    => 'Welcome, ${user.name}!',
   failure: (outcomes, context) => 'Registration failed: ${outcomes.first}',
 );
@@ -144,7 +144,7 @@ final message = result.when(
 `Result` is a sealed class, so Dart's exhaustive pattern matching works too:
 
 ```dart
-switch (result) {
+switch (registration) {
   case Success(:final outcomes, :final value):
     print('${outcomes.first}: ${value.name}');
   case Failure(:final outcomes, :final context):
@@ -306,13 +306,16 @@ Import `package:monart/monart_testing.dart` in your test files to access the mat
 ```dart
 import 'package:monart/monart_testing.dart';
 
-expect(result, haveSucceededWith('userCreated'));
-expect(result, haveSucceededWith(['ok', 'cached']));
-expect(result, haveSucceededWith('userCreated').andValue(alice));
+final registration = UserCreateService(name: 'Alice', email: 'alice@example.com').call();
+final dataSync = DataSyncService(id: id).call();
 
-expect(result, haveFailedWith('unauthorized'));
-expect(result, haveFailedWith(['unprocessableContent', 'clientError']));
-expect(result, haveFailedWith('validationFailed').andContext({'name': ["can't be blank"]}));
+expect(registration, haveSucceededWith('userCreated'));
+expect(registration, haveSucceededWith('userCreated').andValue(alice));
+expect(dataSync, haveSucceededWith(['ok', 'cached']));
+
+expect(registration, haveFailedWith('unauthorized'));
+expect(registration, haveFailedWith('validationFailed').andContext({'name': ["can't be blank"]}));
+expect(dataSync, haveFailedWith(['unprocessableContent', 'clientError']));
 ```
 
 ### MockService
