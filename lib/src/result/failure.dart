@@ -38,6 +38,7 @@ final class Failure<Value> extends Result<Value> {
   ///   nameField.error = failedUser.errors['name'];
   /// })
   /// ```
+  @override
   final Object? context;
 
   @override

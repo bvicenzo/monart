@@ -18,7 +18,6 @@ linter:
     # Design
     prefer_final_fields: true
     prefer_final_locals: true
-    avoid_public_members_in_states: false
     use_super_parameters: true
 
     # Safety

@@ -28,6 +28,7 @@ final class Success<Value> extends Result<Value> {
   Success(Object? outcomes, this.value) : super(_toOutcomes(outcomes));
 
   /// The value produced by the successful operation.
+  @override
   final Value value;
 
   @override

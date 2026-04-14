@@ -12,7 +12,7 @@ void main() {
 
     group('#outcomes', () {
       test('holds all tags when constructed with a list', () {
-        final result = Failure(['unprocessableContent', 'clientError'], null);
+        final result = Failure<String>(['unprocessableContent', 'clientError'], null);
         expect(result.outcomes, equals(['unprocessableContent', 'clientError']));
       });
 
