@@ -1,5 +1,6 @@
 import 'package:monart/monart.dart';
-import 'package:test/test.dart';
+
+import '../helpers/test_semantics.dart';
 
 // ---------------------------------------------------------------------------
 // Test doubles
@@ -85,18 +86,18 @@ class _PipelineService extends ServiceBase<String> {
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('ServiceBase', () {
-    group('#call', () {
-      test('delegates to run', () {
+  describe('ServiceBase', () {
+    describe('#call', () {
+      it('delegates to run', () {
         final result =
             _AlwaysSucceedsService(outcomes: 'done', value: 'v').call();
         expect(result.isSuccess, isTrue);
       });
     });
 
-    group('#success', () {
-      group('with a single string outcome', () {
-        test('returns a Success with the given outcome', () {
+    describe('#success', () {
+      context('with a single string outcome', () {
+        it('returns a Success with the given outcome', () {
           final result =
               _AlwaysSucceedsService(outcomes: 'userCreated', value: 'Alice')
                   .call();
@@ -104,15 +105,15 @@ void main() {
           expect(result.isSuccess, isTrue);
         });
 
-        test('returns a Success carrying the value', () {
+        it('returns a Success carrying the value', () {
           final result =
               _AlwaysSucceedsService(outcomes: 'done', value: 'payload').call();
           expect(result.value, equals('payload'));
         });
       });
 
-      group('with a list of outcomes', () {
-        test('returns a Success with all the given outcomes', () {
+      context('with a list of outcomes', () {
+        it('returns a Success with all the given outcomes', () {
           final result = _AlwaysSucceedsService(
             outcomes: ['ok', 'cached'],
             value: 'data',
@@ -122,24 +123,24 @@ void main() {
       });
     });
 
-    group('#failure', () {
-      group('with a single string outcome and no context', () {
-        test('returns a Failure with the given outcome', () {
+    describe('#failure', () {
+      context('with a single string outcome and no context', () {
+        it('returns a Failure with the given outcome', () {
           final result =
               _AlwaysFailsService(outcomes: 'unauthorized').call();
           expect(result.outcome, equals('unauthorized'));
           expect(result.isFailure, isTrue);
         });
 
-        test('context is null', () {
+        it('context is null', () {
           final result =
               _AlwaysFailsService(outcomes: 'unauthorized').call();
           expect(result.context, isNull);
         });
       });
 
-      group('with context', () {
-        test('returns a Failure carrying the context', () {
+      context('with context', () {
+        it('returns a Failure carrying the context', () {
           final result = _AlwaysFailsService(
             outcomes: 'validationFailed',
             context: 'bad input',
@@ -148,8 +149,8 @@ void main() {
         });
       });
 
-      group('with a list of outcomes', () {
-        test('returns a Failure with all the given outcomes', () {
+      context('with a list of outcomes', () {
+        it('returns a Failure with all the given outcomes', () {
           final result = _AlwaysFailsService(
             outcomes: ['unprocessableContent', 'clientError'],
           ).call();
@@ -161,9 +162,9 @@ void main() {
       });
     });
 
-    group('#check', () {
-      group('when the condition is true', () {
-        test('returns a Success', () {
+    describe('#check', () {
+      context('when the condition is true', () {
+        it('returns a Success', () {
           final result = _CheckService(
             outcomes: 'emailValid',
             data: 'alice@test.com',
@@ -172,7 +173,7 @@ void main() {
           expect(result.isSuccess, isTrue);
         });
 
-        test('carries the data as the success value', () {
+        it('carries the data as the success value', () {
           final result = _CheckService(
             outcomes: 'emailValid',
             data: 'alice@test.com',
@@ -181,7 +182,7 @@ void main() {
           expect(result.value, equals('alice@test.com'));
         });
 
-        test('uses the given outcome', () {
+        it('uses the given outcome', () {
           final result = _CheckService(
             outcomes: 'emailValid',
             data: 'alice@test.com',
@@ -191,8 +192,8 @@ void main() {
         });
       });
 
-      group('when the condition is false', () {
-        test('returns a Failure', () {
+      context('when the condition is false', () {
+        it('returns a Failure', () {
           final result = _CheckService(
             outcomes: 'emailInvalid',
             data: 'notanemail',
@@ -201,7 +202,7 @@ void main() {
           expect(result.isFailure, isTrue);
         });
 
-        test('carries the data as the failure context', () {
+        it('carries the data as the failure context', () {
           final result = _CheckService(
             outcomes: 'emailInvalid',
             data: 'notanemail',
@@ -210,7 +211,7 @@ void main() {
           expect(result.context, equals('notanemail'));
         });
 
-        test('uses the given outcome', () {
+        it('uses the given outcome', () {
           final result = _CheckService(
             outcomes: 'emailInvalid',
             data: 'notanemail',
@@ -221,9 +222,9 @@ void main() {
       });
     });
 
-    group('#tryRun', () {
-      group('when the operation succeeds', () {
-        test('returns a Success with the operation result', () {
+    describe('#tryRun', () {
+      context('when the operation succeeds', () {
+        it('returns a Success with the operation result', () {
           final result = _TryRunService(
             outcomes: 'fetched',
             operation: () => 'data',
@@ -233,9 +234,9 @@ void main() {
         });
       });
 
-      group('when the operation throws', () {
-        group('and no onException is provided', () {
-          test('returns a Failure with the exception as context', () {
+      context('when the operation throws', () {
+        context('and no onException is provided', () {
+          it('returns a Failure with the exception as context', () {
             final exception = Exception('boom');
             final result = _TryRunService(
               outcomes: 'fetchFailed',
@@ -246,8 +247,8 @@ void main() {
           });
         });
 
-        group('and onException is provided', () {
-          test('returns a Failure with the onException return value as context', () {
+        context('and onException is provided', () {
+          it('returns a Failure with the onException return value as context', () {
             final result = _TryRunService(
               outcomes: 'fetchFailed',
               operation: () => throw Exception('network error'),
@@ -259,24 +260,24 @@ void main() {
       });
     });
 
-    group('pipeline via run', () {
-      group('name', () {
-        group('when name is empty', () {
-          test('fails with nameRequired', () {
+    describe('pipeline via run', () {
+      describe('name', () {
+        context('when name is empty', () {
+          it('fails with nameRequired', () {
             final result =
                 _PipelineService(name: '', email: 'alice@test.com').call();
             expect(result.outcome, equals('nameRequired'));
           });
 
-          test('carries the empty name as context', () {
+          it('carries the empty name as context', () {
             final result =
                 _PipelineService(name: '', email: 'alice@test.com').call();
             expect(result.context, equals(''));
           });
         });
 
-        group('when name is provided', () {
-          test('does not fail with nameRequired', () {
+        context('when name is provided', () {
+          it('does not fail with nameRequired', () {
             final result =
                 _PipelineService(name: 'Alice', email: '').call();
             expect(result.outcome, isNot(equals('nameRequired')));
@@ -284,32 +285,32 @@ void main() {
         });
       });
 
-      group('email', () {
-        group('when name is empty', () {
-          test('does not validate email', () {
+      describe('email', () {
+        context('when name is empty', () {
+          it('does not validate email', () {
             final result =
                 _PipelineService(name: '', email: 'notanemail').call();
             expect(result.outcome, isNot(equals('emailInvalid')));
           });
         });
 
-        group('when name is provided', () {
-          group('and email has no @ character', () {
-            test('fails with emailInvalid', () {
+        context('when name is provided', () {
+          context('and email has no @ character', () {
+            it('fails with emailInvalid', () {
               final result =
                   _PipelineService(name: 'Alice', email: 'notanemail').call();
               expect(result.outcome, equals('emailInvalid'));
             });
 
-            test('carries the invalid email as context', () {
+            it('carries the invalid email as context', () {
               final result =
                   _PipelineService(name: 'Alice', email: 'notanemail').call();
               expect(result.context, equals('notanemail'));
             });
           });
 
-          group('and email has valid format', () {
-            test('does not fail with emailInvalid', () {
+          context('and email has valid format', () {
+            it('does not fail with emailInvalid', () {
               final result = _PipelineService(
                 name: 'Alice',
                 email: 'alice@test.com',
@@ -320,8 +321,8 @@ void main() {
         });
       });
 
-      group('when all attributes are valid', () {
-        test('succeeds with the built result', () {
+      context('when all attributes are valid', () {
+        it('succeeds with the built result', () {
           final result = _PipelineService(
             name: 'Alice',
             email: 'alice@test.com',
