@@ -81,8 +81,7 @@ abstract class ServiceBase<Value> {
   /// ```
   ///
   /// See also [failure] for the error path, [check] for inline validation.
-  Success<Value> success(Object? outcomes, Value value) =>
-      Success(outcomes, value);
+  Success<Value> success(Object? outcomes, Value value) => Success(outcomes, value);
 
   /// Signals that the service could not complete its work.
   ///
@@ -102,8 +101,7 @@ abstract class ServiceBase<Value> {
   ///
   /// See also [success] for the happy path, [check] for inline validation,
   /// [tryRun] for wrapping operations that may throw.
-  Failure<Value> failure(Object? outcomes, [Object? context]) =>
-      Failure(outcomes, context);
+  Failure<Value> failure(Object? outcomes, [Object? context]) => Failure(outcomes, context);
 
   /// Validates a condition inline, carrying [data] on both paths.
   ///
@@ -121,11 +119,7 @@ abstract class ServiceBase<Value> {
   /// Because [check] returns `Result<CheckedValue>` rather than `Result<Value>`,
   /// chain it via `andThen((_) => nextStep())` to discard the intermediate
   /// value and continue the pipeline.
-  Result<CheckedValue> check<CheckedValue>(
-    Object? outcomes,
-    CheckedValue data,
-    bool Function() condition,
-  ) =>
+  Result<CheckedValue> check<CheckedValue>(Object? outcomes, CheckedValue data, bool Function() condition) =>
       condition() ? Success(outcomes, data) : Failure(outcomes, data);
 
   /// Runs [operation] and wraps any thrown exception as a [Failure].
@@ -163,11 +157,8 @@ abstract class ServiceBase<Value> {
   }) {
     try {
       return Success(outcomes, operation());
-    } catch (exception, stack) {
-      return Failure(
-        outcomes,
-        onException?.call(exception, stack) ?? exception,
-      );
+    } on Object catch (exception, stack) {
+      return Failure(outcomes, onException?.call(exception, stack) ?? exception);
     }
   }
 }

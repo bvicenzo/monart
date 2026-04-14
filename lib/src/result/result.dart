@@ -14,13 +14,10 @@ part 'failure.dart';
 /// (`failure('emailInvalid', email)`) and the canonical list-based storage.
 /// All [Result] constructors pass through this normalizer.
 List<String> _toOutcomes(Object? outcomes) => switch (outcomes) {
-      final List<String> list => list,
-      final String single => [single],
+      final List<String> outcomesList => outcomesList,
+      final String outcomeTag => [outcomeTag],
       null => const [],
-      _ => throw ArgumentError(
-          'outcomes must be a String or List<String>, '
-          'got ${outcomes.runtimeType}.',
-        ),
+      _ => throw ArgumentError('outcomes must be a String or List<String>, got ${outcomes.runtimeType}.'),
     };
 
 /// The outcome of a service operation — either a [Success] carrying a typed
@@ -103,8 +100,8 @@ sealed class Result<Value> {
   /// ```
   ///
   /// To react only to specific outcomes, use [onSuccessOf].
-  Result<Value> onSuccess(void Function(Value value) fn) {
-    if (this case Success(:final value)) fn(value);
+  Result<Value> onSuccess(void Function(Value value) callback) {
+    if (this case Success(:final value)) callback(value);
     return this;
   }
 
@@ -120,14 +117,9 @@ sealed class Result<Value> {
   ///
   /// Non-matching successes pass through unchanged; failures are always ignored.
   /// For a catch-all success handler, use [onSuccess].
-  Result<Value> onSuccessOf(
-    Object? matchOutcomes,
-    void Function(Value value) fn,
-  ) {
+  Result<Value> onSuccessOf(Object? matchOutcomes, void Function(Value value) callback) {
     final targets = _toOutcomes(matchOutcomes);
-    if (this case Success(:final value) when outcomes.any(targets.contains)) {
-      fn(value);
-    }
+    if (this case Success(:final value) when outcomes.any(targets.contains)) callback(value);
     return this;
   }
 
@@ -143,8 +135,8 @@ sealed class Result<Value> {
   /// ```
   ///
   /// To react only to specific outcomes, use [onFailureOf].
-  Result<Value> onFailure(void Function(String outcome, Object? context) fn) {
-    if (this case Failure(:final context)) fn(outcome, context);
+  Result<Value> onFailure(void Function(String outcome, Object? context) callback) {
+    if (this case Failure(:final context)) callback(outcome, context);
     return this;
   }
 
@@ -161,15 +153,9 @@ sealed class Result<Value> {
   ///
   /// Non-matching failures pass through unchanged; successes are always ignored.
   /// For a catch-all failure handler, use [onFailure].
-  Result<Value> onFailureOf(
-    Object? matchOutcomes,
-    void Function(Object? context) fn,
-  ) {
+  Result<Value> onFailureOf(Object? matchOutcomes, void Function(Object? context) callback) {
     final targets = _toOutcomes(matchOutcomes);
-    if (this case Failure(:final context)
-        when outcomes.any(targets.contains)) {
-      fn(context);
-    }
+    if (this case Failure(:final context) when outcomes.any(targets.contains)) callback(context);
     return this;
   }
 

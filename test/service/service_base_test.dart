@@ -53,11 +53,7 @@ class _TryRunService extends ServiceBase<String> {
   final Object? Function(Object, StackTrace)? onException;
 
   @override
-  Result<String> run() => tryRun(
-        outcomes,
-        operation,
-        onException: onException,
-      );
+  Result<String> run() => tryRun(outcomes, operation, onException: onException);
 }
 
 class _PipelineService extends ServiceBase<String> {
@@ -89,8 +85,7 @@ void main() {
   describe('ServiceBase', () {
     describe('#call', () {
       it('delegates to run', () {
-        final result =
-            _AlwaysSucceedsService(outcomes: 'done', value: 'v').call();
+        final result = const _AlwaysSucceedsService(outcomes: 'done', value: 'v').call();
         expect(result.isSuccess, isTrue);
       });
     });
@@ -98,26 +93,20 @@ void main() {
     describe('#success', () {
       context('with a single string outcome', () {
         it('returns a Success with the given outcome', () {
-          final result =
-              _AlwaysSucceedsService(outcomes: 'userCreated', value: 'Alice')
-                  .call();
+          final result = const _AlwaysSucceedsService(outcomes: 'userCreated', value: 'Alice').call();
           expect(result.outcome, equals('userCreated'));
           expect(result.isSuccess, isTrue);
         });
 
         it('returns a Success carrying the value', () {
-          final result =
-              _AlwaysSucceedsService(outcomes: 'done', value: 'payload').call();
+          final result = const _AlwaysSucceedsService(outcomes: 'done', value: 'payload').call();
           expect(result.value, equals('payload'));
         });
       });
 
       context('with a list of outcomes', () {
         it('returns a Success with all the given outcomes', () {
-          final result = _AlwaysSucceedsService(
-            outcomes: ['ok', 'cached'],
-            value: 'data',
-          ).call();
+          final result = const _AlwaysSucceedsService(outcomes: ['ok', 'cached'], value: 'data').call();
           expect(result.outcomes, equals(['ok', 'cached']));
         });
       });
@@ -126,38 +115,28 @@ void main() {
     describe('#failure', () {
       context('with a single string outcome and no context', () {
         it('returns a Failure with the given outcome', () {
-          final result =
-              _AlwaysFailsService(outcomes: 'unauthorized').call();
+          final result = const _AlwaysFailsService(outcomes: 'unauthorized').call();
           expect(result.outcome, equals('unauthorized'));
           expect(result.isFailure, isTrue);
         });
 
         it('context is null', () {
-          final result =
-              _AlwaysFailsService(outcomes: 'unauthorized').call();
+          final result = const _AlwaysFailsService(outcomes: 'unauthorized').call();
           expect(result.context, isNull);
         });
       });
 
       context('with context', () {
         it('returns a Failure carrying the context', () {
-          final result = _AlwaysFailsService(
-            outcomes: 'validationFailed',
-            context: 'bad input',
-          ).call();
+          final result = const _AlwaysFailsService(outcomes: 'validationFailed', context: 'bad input').call();
           expect(result.context, equals('bad input'));
         });
       });
 
       context('with a list of outcomes', () {
         it('returns a Failure with all the given outcomes', () {
-          final result = _AlwaysFailsService(
-            outcomes: ['unprocessableContent', 'clientError'],
-          ).call();
-          expect(
-            result.outcomes,
-            equals(['unprocessableContent', 'clientError']),
-          );
+          final result = const _AlwaysFailsService(outcomes: ['unprocessableContent', 'clientError']).call();
+          expect(result.outcomes, equals(['unprocessableContent', 'clientError']));
         });
       });
     });
@@ -165,58 +144,34 @@ void main() {
     describe('#check', () {
       context('when the condition is true', () {
         it('returns a Success', () {
-          final result = _CheckService(
-            outcomes: 'emailValid',
-            data: 'alice@test.com',
-            isValid: true,
-          ).call();
+          final result = const _CheckService(outcomes: 'emailValid', data: 'alice@test.com', isValid: true).call();
           expect(result.isSuccess, isTrue);
         });
 
         it('carries the data as the success value', () {
-          final result = _CheckService(
-            outcomes: 'emailValid',
-            data: 'alice@test.com',
-            isValid: true,
-          ).call();
+          final result = const _CheckService(outcomes: 'emailValid', data: 'alice@test.com', isValid: true).call();
           expect(result.value, equals('alice@test.com'));
         });
 
         it('uses the given outcome', () {
-          final result = _CheckService(
-            outcomes: 'emailValid',
-            data: 'alice@test.com',
-            isValid: true,
-          ).call();
+          final result = const _CheckService(outcomes: 'emailValid', data: 'alice@test.com', isValid: true).call();
           expect(result.outcome, equals('emailValid'));
         });
       });
 
       context('when the condition is false', () {
         it('returns a Failure', () {
-          final result = _CheckService(
-            outcomes: 'emailInvalid',
-            data: 'notanemail',
-            isValid: false,
-          ).call();
+          final result = const _CheckService(outcomes: 'emailInvalid', data: 'notanemail', isValid: false).call();
           expect(result.isFailure, isTrue);
         });
 
         it('carries the data as the failure context', () {
-          final result = _CheckService(
-            outcomes: 'emailInvalid',
-            data: 'notanemail',
-            isValid: false,
-          ).call();
+          final result = const _CheckService(outcomes: 'emailInvalid', data: 'notanemail', isValid: false).call();
           expect(result.context, equals('notanemail'));
         });
 
         it('uses the given outcome', () {
-          final result = _CheckService(
-            outcomes: 'emailInvalid',
-            data: 'notanemail',
-            isValid: false,
-          ).call();
+          final result = const _CheckService(outcomes: 'emailInvalid', data: 'notanemail', isValid: false).call();
           expect(result.outcome, equals('emailInvalid'));
         });
       });
@@ -225,10 +180,7 @@ void main() {
     describe('#tryRun', () {
       context('when the operation succeeds', () {
         it('returns a Success with the operation result', () {
-          final result = _TryRunService(
-            outcomes: 'fetched',
-            operation: () => 'data',
-          ).call();
+          final result = _TryRunService(outcomes: 'fetched', operation: () => 'data').call();
           expect(result.isSuccess, isTrue);
           expect(result.value, equals('data'));
         });
@@ -238,10 +190,7 @@ void main() {
         context('and no onException is provided', () {
           it('returns a Failure with the exception as context', () {
             final exception = Exception('boom');
-            final result = _TryRunService(
-              outcomes: 'fetchFailed',
-              operation: () => throw exception,
-            ).call();
+            final result = _TryRunService(outcomes: 'fetchFailed', operation: () => throw exception).call();
             expect(result.isFailure, isTrue);
             expect(result.context, same(exception));
           });
@@ -264,22 +213,19 @@ void main() {
       describe('name', () {
         context('when name is empty', () {
           it('fails with nameRequired', () {
-            final result =
-                _PipelineService(name: '', email: 'alice@test.com').call();
+            final result = const _PipelineService(name: '', email: 'alice@test.com').call();
             expect(result.outcome, equals('nameRequired'));
           });
 
           it('carries the empty name as context', () {
-            final result =
-                _PipelineService(name: '', email: 'alice@test.com').call();
+            final result = const _PipelineService(name: '', email: 'alice@test.com').call();
             expect(result.context, equals(''));
           });
         });
 
         context('when name is provided', () {
           it('does not fail with nameRequired', () {
-            final result =
-                _PipelineService(name: 'Alice', email: '').call();
+            final result = const _PipelineService(name: 'Alice', email: '').call();
             expect(result.outcome, isNot(equals('nameRequired')));
           });
         });
@@ -288,8 +234,7 @@ void main() {
       describe('email', () {
         context('when name is empty', () {
           it('does not validate email', () {
-            final result =
-                _PipelineService(name: '', email: 'notanemail').call();
+            final result = const _PipelineService(name: '', email: 'notanemail').call();
             expect(result.outcome, isNot(equals('emailInvalid')));
           });
         });
@@ -297,24 +242,19 @@ void main() {
         context('when name is provided', () {
           context('and email has no @ character', () {
             it('fails with emailInvalid', () {
-              final result =
-                  _PipelineService(name: 'Alice', email: 'notanemail').call();
+              final result = const _PipelineService(name: 'Alice', email: 'notanemail').call();
               expect(result.outcome, equals('emailInvalid'));
             });
 
             it('carries the invalid email as context', () {
-              final result =
-                  _PipelineService(name: 'Alice', email: 'notanemail').call();
+              final result = const _PipelineService(name: 'Alice', email: 'notanemail').call();
               expect(result.context, equals('notanemail'));
             });
           });
 
           context('and email has valid format', () {
             it('does not fail with emailInvalid', () {
-              final result = _PipelineService(
-                name: 'Alice',
-                email: 'alice@test.com',
-              ).call();
+              final result = const _PipelineService(name: 'Alice', email: 'alice@test.com').call();
               expect(result.outcome, isNot(equals('emailInvalid')));
             });
           });
@@ -323,10 +263,7 @@ void main() {
 
       context('when all attributes are valid', () {
         it('succeeds with the built result', () {
-          final result = _PipelineService(
-            name: 'Alice',
-            email: 'alice@test.com',
-          ).call();
+          final result = const _PipelineService(name: 'Alice', email: 'alice@test.com').call();
           expect(result.isSuccess, isTrue);
           expect(result.outcome, equals('built'));
           expect(result.value, equals('Alice <alice@test.com>'));

@@ -41,16 +41,11 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// ```
   ///
   /// See also [orElse] to recover from a failure.
-  FutureResult<NextValue> andThen<NextValue>(
-    FutureOr<Result<NextValue>> Function(Value value) nextStep,
-  ) =>
-      then(
-        (result) => switch (result) {
-          Success(:final value) => nextStep(value),
-          Failure(:final context) =>
-            Failure<NextValue>(result.outcomes, context),
-        },
-      );
+  FutureResult<NextValue> andThen<NextValue>(FutureOr<Result<NextValue>> Function(Value value) nextStep) =>
+      then((result) => switch (result) {
+        Success(:final value) => nextStep(value),
+        Failure(:final context) => Failure<NextValue>(result.outcomes, context),
+      },);
 
   /// Recovers from a failure by producing a new result; ignored if already
   /// successful.
@@ -63,16 +58,11 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// ```
   ///
   /// See also [andThen] for chaining forward on success.
-  FutureResult<Value> orElse(
-    FutureOr<Result<Value>> Function(List<String> outcomes, Object? context)
-        recovery,
-  ) =>
-      then(
-        (result) => switch (result) {
-          Success() => result,
-          Failure(:final context) => recovery(result.outcomes, context),
-        },
-      );
+  FutureResult<Value> orElse(FutureOr<Result<Value>> Function(List<String> outcomes, Object? context) recovery) =>
+      then((result) => switch (result) {
+        Success() => result,
+        Failure(:final context) => recovery(result.outcomes, context),
+      },);
 
   /// Forces exhaustive handling of both the success and failure cases,
   /// returning a [Future] of the mapped value.
@@ -86,10 +76,9 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   Future<Output> when<Output>({
     required Output Function(List<String> outcomes, Value value) success,
     required Output Function(List<String> outcomes, Object? context) failure,
-  }) =>
-      then((result) => result.when(success: success, failure: failure));
+  }) => then((result) => result.when(success: success, failure: failure));
 
-  /// Runs [fn] if the resolved result is a success; does nothing on failure.
+  /// Runs [callback] if the resolved result is a success; does nothing on failure.
   ///
   /// Returns a [FutureResult] so calls can be chained:
   ///
@@ -101,10 +90,10 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// ```
   ///
   /// To react only to specific outcomes, use [onSuccessOf].
-  FutureResult<Value> onSuccess(void Function(Value value) fn) =>
-      then((result) => result.onSuccess(fn));
+  FutureResult<Value> onSuccess(void Function(Value value) callback) =>
+      then((result) => result.onSuccess(callback));
 
-  /// Runs [fn] if the resolved result is a success *and* its outcomes
+  /// Runs [callback] if the resolved result is a success *and* its outcomes
   /// intersect with [matchOutcomes].
   ///
   /// [matchOutcomes] accepts a single [String] or a [List<String>]:
@@ -117,13 +106,10 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// ```
   ///
   /// For a catch-all success handler, use [onSuccess].
-  FutureResult<Value> onSuccessOf(
-    Object? matchOutcomes,
-    void Function(Value value) fn,
-  ) =>
-      then((result) => result.onSuccessOf(matchOutcomes, fn));
+  FutureResult<Value> onSuccessOf(Object? matchOutcomes, void Function(Value value) callback) =>
+      then((result) => result.onSuccessOf(matchOutcomes, callback));
 
-  /// Runs [fn] if the resolved result is a failure, passing the primary
+  /// Runs [callback] if the resolved result is a failure, passing the primary
   /// outcome and context.
   ///
   /// Use this as the final catch-all after any specific [onFailureOf] handlers:
@@ -136,12 +122,10 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// ```
   ///
   /// To react only to specific outcomes, use [onFailureOf].
-  FutureResult<Value> onFailure(
-    void Function(String outcome, Object? context) fn,
-  ) =>
-      then((result) => result.onFailure(fn));
+  FutureResult<Value> onFailure(void Function(String outcome, Object? context) callback) =>
+      then((result) => result.onFailure(callback));
 
-  /// Runs [fn] if the resolved result is a failure *and* its outcomes
+  /// Runs [callback] if the resolved result is a failure *and* its outcomes
   /// intersect with [matchOutcomes].
   ///
   /// [matchOutcomes] accepts a single [String] or a [List<String>]:
@@ -155,9 +139,6 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// ```
   ///
   /// For a catch-all failure handler, use [onFailure].
-  FutureResult<Value> onFailureOf(
-    Object? matchOutcomes,
-    void Function(Object? context) fn,
-  ) =>
-      then((result) => result.onFailureOf(matchOutcomes, fn));
+  FutureResult<Value> onFailureOf(Object? matchOutcomes, void Function(Object? context) callback) =>
+      then((result) => result.onFailureOf(matchOutcomes, callback));
 }
