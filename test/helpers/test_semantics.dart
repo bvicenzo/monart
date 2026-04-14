@@ -1,7 +1,9 @@
 import 'package:test/test.dart' as dart_test;
 
-// Re-export the full test package so test files only need one import.
+// Re-export the full test package and custom matchers so test files only need
+// one import.
 export 'package:test/test.dart';
+export 'result_matchers.dart';
 
 /// Describes the subject under test — a class, method, or module.
 ///
