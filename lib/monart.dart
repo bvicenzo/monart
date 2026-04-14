@@ -44,5 +44,6 @@
 /// ```
 library monart;
 
+export 'src/extensions/future_result_extension.dart';
 export 'src/result/result.dart';
 export 'src/service/service_base.dart';
