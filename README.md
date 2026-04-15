@@ -322,11 +322,12 @@ expect(dataSync, haveFailedWith(['unprocessableContent', 'clientError']));
 
 `mockService<MockedService>` intercepts all `.call()` invocations of a service type and returns a fixed `Result` without executing `run()`. No dependency injection required — the production code stays untouched.
 
-Use it in `setUp` — cleanup is automatic, no `tearDown` needed:
+Use it in `setUp` with `addTearDown` to ensure a clean state between tests:
 
 ```dart
 setUp(() {
   mockService<UserCreateService>(Success('userCreated', alice));
+  addTearDown(clearServiceMocks);
 });
 ```
 
@@ -345,6 +346,7 @@ class OrderOrchestrator extends ServiceBase<Order> {
 // In tests — treat UserCreateService as a black box:
 setUp(() {
   mockService<UserCreateService>(Success('userCreated', alice));
+  addTearDown(clearServiceMocks);
 });
 
 it('creates the order when the user is valid', () {

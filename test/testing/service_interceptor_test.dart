@@ -5,6 +5,8 @@ import '../helpers/test_semantics.dart';
 
 void main() {
   describe('mockService', () {
+    setUp(() => addTearDown(clearServiceMocks));
+
     context('when a success is registered for a service type', () {
       it('intercepts call and returns the mocked result', () {
         mockService<_UserCreateService>(Success('userCreated', 'Alice'));
