@@ -1,4 +1,4 @@
-import 'package:test/test.dart';
+import 'package:matcher/matcher.dart';
 
 import '../result/result.dart';
 
