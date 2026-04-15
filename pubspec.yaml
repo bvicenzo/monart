@@ -1,8 +1,5 @@
 name: monart
-description: >-
-  A Dart library for building robust service objects using the Result Monad
-  and Railway-Oriented Programming patterns. Inspired by the elegance of
-  functional composition without sacrificing readability.
+description: Railway-Oriented Programming for Dart. Build composable service objects that return Result values — never throw — using Success, Failure, and andThen.
 version: 0.1.0
 homepage: https://github.com/bvicenzo/monart
 repository: https://github.com/bvicenzo/monart
