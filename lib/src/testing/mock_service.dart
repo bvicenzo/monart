@@ -44,7 +44,7 @@ import '../service/service_base.dart';
 ///
 /// See also [ServiceBase] for the real service contract.
 class MockService<Value> extends ServiceBase<Value> {
-  /// Creates a mock that returns [result] on every [call].
+  /// Creates a mock that always returns the given [Result] on every [call].
   MockService(this._result);
 
   /// Creates a mock that succeeds with [outcomes] and [value].

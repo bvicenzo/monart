@@ -102,7 +102,7 @@ extension FutureResultX<Value> on Future<Result<Value>> {
   /// await service
   ///     .runAsync()
   ///     .onSuccessOf('userCreated', (user) => redirectToDashboard(user))
-  ///     .onSuccessOf(['ok', 'cached'], (data) => render(data));
+  ///     .onSuccessOf(['ok', 'cached'], (response) => render(response));
   /// ```
   ///
   /// For a catch-all success handler, use [onSuccess].

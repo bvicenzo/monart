@@ -88,7 +88,7 @@ sealed class Result<Value> {
         Failure(:final context) => failure(outcomes, context),
       };
 
-  /// Runs [fn] if this is a success; does nothing on failure.
+  /// Runs [callback] if this is a success; does nothing on failure.
   ///
   /// Returns `this` so calls can be chained:
   ///
@@ -105,7 +105,7 @@ sealed class Result<Value> {
     return this;
   }
 
-  /// Runs [fn] if this is a success *and* its outcomes intersect with [matchOutcomes].
+  /// Runs [callback] if this is a success *and* its outcomes intersect with [matchOutcomes].
   ///
   /// [matchOutcomes] accepts a single [String] or a [List<String>]:
   ///
@@ -123,7 +123,7 @@ sealed class Result<Value> {
     return this;
   }
 
-  /// Runs [fn] if this is a failure, passing the primary outcome and context.
+  /// Runs [callback] if this is a failure, passing the primary outcome and context.
   ///
   /// Use this as the final catch-all after any specific [onFailureOf] handlers:
   ///
@@ -140,7 +140,7 @@ sealed class Result<Value> {
     return this;
   }
 
-  /// Runs [fn] if this is a failure *and* its outcomes intersect with [matchOutcomes].
+  /// Runs [callback] if this is a failure *and* its outcomes intersect with [matchOutcomes].
   ///
   /// [matchOutcomes] accepts a single [String] or a [List<String>]:
   ///
@@ -193,7 +193,7 @@ sealed class Result<Value> {
   /// OrderFetchFromApiService(id: id)
   ///     .call()
   ///     .orElse((outcomes, _) => OrderFetchFromCacheService(id: id).call())
-  ///     .onSuccess((data) => render(data));
+  ///     .onSuccess((order) => render(order));
   /// ```
   ///
   /// If recovery itself returns a [Failure], that failure propagates forward.

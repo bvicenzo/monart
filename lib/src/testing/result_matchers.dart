@@ -29,9 +29,9 @@ bool _outcomesEqual(List<String> actual, List<String> expected) =>
 /// constructor. Chain [SuccessMatcher.andValue] to also assert the value:
 ///
 /// ```dart
-/// expect(result, haveSucceededWith('userCreated'));
-/// expect(result, haveSucceededWith(['userCreated', 'cached']));
-/// expect(result, haveSucceededWith('userCreated').andValue(alice));
+/// expect(registration, haveSucceededWith('userCreated'));
+/// expect(registration, haveSucceededWith(['userCreated', 'cached']));
+/// expect(registration, haveSucceededWith('userCreated').andValue(alice));
 /// ```
 SuccessMatcher haveSucceededWith(Object? outcomes) => SuccessMatcher(_normalizeOutcomes(outcomes));
 
@@ -94,9 +94,9 @@ class SuccessMatcher extends Matcher {
 /// constructor. Chain [FailureMatcher.andContext] to also assert the context:
 ///
 /// ```dart
-/// expect(result, haveFailedWith('unauthorized'));
-/// expect(result, haveFailedWith(['unauthorized', 'forbidden']));
-/// expect(result, haveFailedWith('unauthorized').andContext('bad token'));
+/// expect(registration, haveFailedWith('unauthorized'));
+/// expect(registration, haveFailedWith(['unauthorized', 'forbidden']));
+/// expect(registration, haveFailedWith('unauthorized').andContext('bad token'));
 /// ```
 FailureMatcher haveFailedWith(Object? outcomes) => FailureMatcher(_normalizeOutcomes(outcomes));
 
