@@ -1,8 +1,7 @@
 # monart
 
-<!-- Badges — will be populated after CI/CD and pub.dev publication -->
-<!-- [![pub.dev](https://img.shields.io/pub/v/monart.svg)](https://pub.dev/packages/monart) -->
-<!-- [![CI](https://github.com/bvicenzo/monart/actions/workflows/ci.yml/badge.svg)](https://github.com/bvicenzo/monart/actions/workflows/ci.yml) -->
+[![pub.dev](https://img.shields.io/pub/v/monart.svg)](https://pub.dev/packages/monart)
+[![CI](https://github.com/bvicenzo/monart/actions/workflows/ci.yml/badge.svg)](https://github.com/bvicenzo/monart/actions/workflows/ci.yml)
 <!-- [![Coverage](https://coveralls.io/repos/github/bvicenzo/monart/badge.svg)](https://coveralls.io/github/bvicenzo/monart) -->
 
 Railway-Oriented Programming for Dart. Build service objects that compose cleanly and never throw — every operation returns a `Result`, either a `Success` or a `Failure`, that can be chained, filtered, and handled without `try/catch`.
@@ -11,8 +10,8 @@ Inspired by the Ruby gem [f_service](https://github.com/fretadao/f_service).
 
 ## Documentation
 
-Full API reference: <!-- [pub.dev/documentation/monart](https://pub.dev/documentation/monart/latest/) — available after publication -->
-*Coming after pub.dev publication.*
+- Full API reference: [pub.dev/documentation/monart](https://pub.dev/documentation/monart/latest/) — available after publication
+- Latest Full API reference: [https://bvicenzo.github.io/monart/](https://bvicenzo.github.io/monart/)
 
 ---
 
