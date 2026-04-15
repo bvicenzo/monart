@@ -4,8 +4,6 @@ import 'package:monart/monart_testing.dart';
 import '../helpers/test_semantics.dart';
 
 void main() {
-  tearDown(clearServiceMocks);
-
   describe('mockService', () {
     context('when a success is registered for a service type', () {
       it('intercepts call and returns the mocked result', () {
