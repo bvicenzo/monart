@@ -1,7 +1,8 @@
 /// Testing utilities for monart.
 ///
 /// Import this library in your test files alongside `package:monart/monart.dart`
-/// to access [MockService] and any future test helpers:
+/// to access [mockService], [clearServiceMocks], [MockService],
+/// [haveSucceededWith], and [haveFailedWith]:
 ///
 /// ```dart
 /// import 'package:monart/monart.dart';
@@ -14,3 +15,4 @@ library monart_testing;
 
 export 'src/testing/mock_service.dart';
 export 'src/testing/result_matchers.dart';
+export 'src/testing/service_interceptor.dart';

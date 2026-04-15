@@ -1,4 +1,5 @@
 import '../result/result.dart';
+import 'service_interceptors.dart';
 
 /// Base class for service objects that follow the Railway-Oriented Programming
 /// pattern.
@@ -62,10 +63,21 @@ abstract class ServiceBase<Value> {
 
   /// Invokes [run], allowing the service to be called like a function.
   ///
+  /// In test environments, [mockService] from `package:monart/monart_testing.dart`
+  /// can intercept this call and return a fixed [Result] without invoking [run].
+  ///
   /// ```dart
   /// UserCreateService(name: 'Alice', email: 'alice@test.com').call()
   /// ```
-  Result<Value> call() => run();
+  Result<Value> call() {
+    if (serviceInterceptors[runtimeType] case final interceptor?) {
+      return switch (interceptor()) {
+        Success(:final outcomes, :final value) => Success<Value>(outcomes, value as Value),
+        Failure(:final outcomes, :final context) => Failure<Value>(outcomes, context),
+      };
+    }
+    return run();
+  }
 
   /// Signals that this step of the service completed successfully.
   ///

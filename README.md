@@ -297,7 +297,7 @@ await OrderFetchService(orderId: 'ord-123')
 
 ## Testing utilities
 
-Import `package:monart/monart_testing.dart` in your test files to access the matchers and `MockService`.
+Import `package:monart/monart_testing.dart` in your test files to access the matchers and mocking helpers.
 
 ### Result matchers
 
@@ -318,46 +318,89 @@ expect(registration, haveFailedWith('validationFailed').andContext({'name': ["ca
 expect(dataSync, haveFailedWith(['unprocessableContent', 'clientError']));
 ```
 
-### MockService
+### mockService — intercepting service calls
 
-`MockService<Value>` is a `ServiceBase` that returns a fixed `Result`. Type your service dependencies as `ServiceBase<Value>` to make them injectable, then substitute `MockService` in tests:
+`mockService<MockedService>` intercepts all `.call()` invocations of a service type and returns a fixed `Result` without executing `run()`. No dependency injection required — the production code stays untouched.
+
+Use it in `setUp` and always clear with `clearServiceMocks` in `tearDown`:
 
 ```dart
-class OrderOrchestrator {
-  const OrderOrchestrator({required this.userService});
+setUp(() {
+  mockService<UserCreateService>(Success('userCreated', alice));
+});
 
-  final ServiceBase<User> userService; // injectable — real or mock
+tearDown(clearServiceMocks);
+```
 
+This lets you test a service that depends on others by controlling what those dependencies return, without re-testing their internal logic:
+
+```dart
+// OrderOrchestrator calls UserCreateService internally — no DI needed
+class OrderOrchestrator extends ServiceBase<Order> {
+  @override
   Result<Order> run() =>
-      userService
+      UserCreateService(name: name, email: email)
           .call()
           .andThen((user) => OrderCreateService(user: user).call());
 }
 
-// In tests:
-final mockUser = User(name: 'Alice', email: 'alice@example.com');
+// In tests — treat UserCreateService as a black box:
+setUp(() {
+  mockService<UserCreateService>(Success('userCreated', alice));
+});
 
-final orchestrator = OrderOrchestrator(
-  userService: MockService.success('userCreated', mockUser),
+tearDown(clearServiceMocks);
+
+it('creates the order when the user is valid', () {
+  expect(OrderOrchestrator(name: 'Alice', email: 'alice@example.com').call(),
+      haveSucceededWith('orderCreated'));
+});
+
+it('stops the pipeline when user creation fails', () {
+  mockService<UserCreateService>(Failure('emailInvalid'));
+  expect(OrderOrchestrator(name: 'Alice', email: 'bad').call(),
+      haveFailedWith('emailInvalid'));
+});
+```
+
+`mockService` accepts any `Result` — use `Success` and `Failure` directly:
+
+```dart
+mockService<UserCreateService>(Success('userCreated', alice));
+mockService<UserCreateService>(Success(['ok', 'cached'], alice));
+mockService<UserCreateService>(Failure('unauthorized'));
+mockService<UserCreateService>(Failure('validationFailed', errors));
+```
+
+### MockService — explicit injection
+
+For the cases where a service genuinely accepts different implementations (a payment orchestrator that works with Pix or credit card, for example), `MockService<Value>` is a `ServiceBase` you can inject directly:
+
+```dart
+class PaymentOrchestrator extends ServiceBase<Receipt> {
+  const PaymentOrchestrator({required this.paymentService});
+
+  final ServiceBase<Receipt> paymentService; // Pix, CreditCard, or mock
+
+  @override
+  Result<Receipt> run() => paymentService.call();
+}
+
+// In tests:
+final orchestrator = PaymentOrchestrator(
+  paymentService: MockService.success('paid', receipt),
 );
 
-expect(orchestrator.run(), haveSucceededWith('orderCreated'));
+expect(orchestrator.run(), haveSucceededWith('paid'));
 ```
 
 All three constructors are available:
 
 ```dart
-// From a ready-made Result
-MockService<User>(Success('userCreated', alice))
-
-// Shorthand for success
-MockService<User>.success('userCreated', alice)
-MockService<User>.success(['ok', 'cached'], alice)
-
-// Shorthand for failure
-MockService<User>.failure('unauthorized')
-MockService<User>.failure('validationFailed', errors)
-MockService<User>.failure(['unprocessableContent', 'clientError'], response)
+MockService<Receipt>(Success('paid', receipt))
+MockService<Receipt>.success('paid', receipt)
+MockService<Receipt>.failure('declined')
+MockService<Receipt>.failure('declined', errorDetails)
 ```
 
 ---
