@@ -401,6 +401,49 @@ MockService<Receipt>.failure('declined', errorDetails)
 
 ---
 
+## Contributing
+
+### Running tests and analysis locally
+
+```bash
+dart pub get
+dart analyze --fatal-infos
+dart test
+```
+
+### Workflows
+
+**CI** runs automatically on every push to `master` and on every pull request.
+Tests and static analysis are executed against three SDK versions — `3.0.0`
+(the declared minimum), `stable`, and `beta`. Only `stable` is required to pass;
+the other two run with `continue-on-error` so you get early visibility without
+blocking merges.
+
+**Release** is triggered by pushing a version tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow runs the full test suite and then creates a GitHub Release with
+auto-generated release notes. No manual steps needed beyond the tag.
+
+**Docs** are deployed to GitHub Pages automatically when the `version:` line in
+`pubspec.yaml` changes on `master`. To force a deploy without bumping the version,
+go to Actions → "Deploy Docs" → "Run workflow".
+
+**Publish** is always manual. After the release tag exists, go to
+Actions → "Publish to pub.dev" → "Run workflow", enter the version (e.g. `0.1.0`),
+and confirm. The workflow checks out that exact tag, re-runs tests and analysis,
+does a `--dry-run`, and only then publishes.
+
+Publishing uses OIDC (Trusted Publishers) — no tokens stored as secrets. First-time
+setup: on pub.dev go to "My pub.dev" → "Trusted publishers" and add
+`github.com/bvicenzo/monart`.
+
+---
+
 ## License
 
 [MIT](LICENSE)
