@@ -42,7 +42,7 @@
 ///     .onFailureOf('emailInvalid', (email) => print('Invalid email: $email'))
 ///     .onFailure((outcome, _) => print('Unexpected: $outcome'));
 /// ```
-library monart;
+library;
 
 export 'src/extensions/future_result_extension.dart';
 export 'src/result/result.dart';

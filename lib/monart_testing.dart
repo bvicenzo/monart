@@ -11,7 +11,7 @@
 ///
 /// This entry point is intentionally separate from the main library so that
 /// test-only code is never bundled into production builds.
-library monart_testing;
+library;
 
 export 'src/testing/mock_service.dart';
 export 'src/testing/result_matchers.dart';
