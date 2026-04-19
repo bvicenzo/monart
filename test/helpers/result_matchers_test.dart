@@ -44,27 +44,38 @@ void main() {
       });
 
       context('with andValue', () {
-        it('matches when both outcome and value are equal', () {
-          final result = Success('userCreated', 'Alice');
-          expect(result, haveSucceededWith('userCreated').andValue('Alice'));
+        context('and value is not a Matcher', () {
+          it('matches when both outcome and value are equal', () {
+            final result = Success('userCreated', 'Alice');
+            expect(result, haveSucceededWith('userCreated').andValue('Alice'));
+          });
+
+          it('does not match when the value differs', () {
+            final result = Success('userCreated', 'Alice');
+            expect(result, isNot(haveSucceededWith('userCreated').andValue('Bob')));
+          });
+
+          it('matches when value is null and result carries null', () {
+            final result = Success<String?>('done', null);
+            expect(result, haveSucceededWith('done').andValue(null));
+          });
+
+          it('matches with list outcomes and a value', () {
+            final result = Success(['created', 'cached'], 42);
+            expect(result, haveSucceededWith(['created', 'cached']).andValue(42));
+          });
         });
 
-        it('does not match when the value differs', () {
-          final result = Success('userCreated', 'Alice');
-          expect(result, isNot(haveSucceededWith('userCreated').andValue('Bob')));
-        });
+        context('and value is a Matcher', () {
+          it('matches when the Matcher passes', () {
+            final result = Success('userCreated', 42);
+            expect(result, haveSucceededWith('userCreated').andValue(isA<int>()));
+          });
 
-        it('matches when value is null and result carries null', () {
-          final result = Success<String?>('done', null);
-          expect(result, haveSucceededWith('done').andValue(null));
-        });
-
-        it('matches with list outcomes and a value', () {
-          final result = Success(['created', 'cached'], 42);
-          expect(
-            result,
-            haveSucceededWith(['created', 'cached']).andValue(42),
-          );
+          it('does not match when the Matcher fails', () {
+            final result = Success('userCreated', 'Alice');
+            expect(result, isNot(haveSucceededWith('userCreated').andValue(isA<int>())));
+          });
         });
       });
     });
@@ -114,37 +125,41 @@ void main() {
       });
 
       context('with andContext', () {
-        it('matches when both outcome and context are equal', () {
-          final result = Failure<String>('unauthorized', 'bad token');
-          expect(
-            result,
-            haveFailedWith('unauthorized').andContext('bad token'),
-          );
+        context('and context is not a Matcher', () {
+          it('matches when both outcome and context are equal', () {
+            final result = Failure<String>('unauthorized', 'bad token');
+            expect(result, haveFailedWith('unauthorized').andContext('bad token'));
+          });
+
+          it('does not match when the context differs', () {
+            final result = Failure<String>('unauthorized', 'bad token');
+            expect(result, isNot(haveFailedWith('unauthorized').andContext('other')));
+          });
+
+          it('matches when context is null and result carries no context', () {
+            final result = Failure<String>('unauthorized');
+            expect(result, haveFailedWith('unauthorized').andContext(null));
+          });
+
+          it('matches with list outcomes and a context', () {
+            final result = Failure<String>(['unprocessableContent', 'clientError'], {'field': 'email'});
+            expect(
+              result,
+              haveFailedWith(['unprocessableContent', 'clientError']).andContext({'field': 'email'}),
+            );
+          });
         });
 
-        it('does not match when the context differs', () {
-          final result = Failure<String>('unauthorized', 'bad token');
-          expect(
-            result,
-            isNot(haveFailedWith('unauthorized').andContext('other')),
-          );
-        });
+        context('and context is a Matcher', () {
+          it('matches when the Matcher passes', () {
+            final result = Failure<String>('unauthorized', 'bad token');
+            expect(result, haveFailedWith('unauthorized').andContext(isA<String>()));
+          });
 
-        it('matches when context is null and result carries no context', () {
-          final result = Failure<String>('unauthorized');
-          expect(result, haveFailedWith('unauthorized').andContext(null));
-        });
-
-        it('matches with list outcomes and a context', () {
-          final result = Failure<String>(
-            ['unprocessableContent', 'clientError'],
-            {'field': 'email'},
-          );
-          expect(
-            result,
-            haveFailedWith(['unprocessableContent', 'clientError'])
-                .andContext({'field': 'email'}),
-          );
+          it('does not match when the Matcher fails', () {
+            final result = Failure<String>('unauthorized', 'bad token');
+            expect(result, isNot(haveFailedWith('unauthorized').andContext(isA<int>())));
+          });
         });
       });
     });

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-19
+
+### Changed
+
+- `andValue` and `andContext` now accept any `Matcher` from `package:matcher` in
+  addition to plain values. Passing a `Matcher` (e.g. `isA<UserSessionModel>()`,
+  `containsPair(...)`) evaluates it directly instead of wrapping it in `equals`.
+  Plain values continue to work exactly as before.
+
 ## [0.1.1] - 2026-04-15
 
 ### Fixed

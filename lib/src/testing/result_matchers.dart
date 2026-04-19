@@ -26,12 +26,31 @@ bool _outcomesEqual(List<String> actual, List<String> expected) =>
 /// Matches a [Result] that is a [Success] with the given [outcomes].
 ///
 /// Accepts a single [String] or a [List<String>], mirroring the [Success]
-/// constructor. Chain [SuccessMatcher.andValue] to also assert the value:
+/// constructor. Chain [SuccessMatcher.andValue] to also assert the value.
+///
+/// [andValue] accepts a plain value (compared with [equals]) or any
+/// [Matcher] from `package:matcher` — allowing type checks, partial
+/// attribute assertions, and any custom matcher:
 ///
 /// ```dart
-/// expect(registration, haveSucceededWith('userCreated'));
-/// expect(registration, haveSucceededWith(['userCreated', 'cached']));
-/// expect(registration, haveSucceededWith('userCreated').andValue(alice));
+/// expect(login, haveSucceededWith('ok'));
+/// expect(login, haveSucceededWith(['ok', 'cached']));
+///
+/// // plain value
+/// expect(login, haveSucceededWith('ok').andValue(alice));
+///
+/// // type check
+/// expect(login, haveSucceededWith('ok').andValue(isA<UserSessionModel>()));
+///
+/// // type + attribute assertions
+/// expect(
+///   login,
+///   haveSucceededWith('ok').andValue(
+///     isA<UserSessionModel>()
+///       .having((session) => session.user.name, 'name', 'Alice')
+///       .having((session) => session.token, 'token', isNotEmpty),
+///   ),
+/// );
 /// ```
 SuccessMatcher haveSucceededWith(Object? outcomes) => SuccessMatcher(_normalizeOutcomes(outcomes));
 
@@ -47,17 +66,18 @@ class SuccessMatcher extends Matcher {
 
   final List<String> _expectedOutcomes;
   final bool _checkValue;
-  final Object? _expectedValue;
+  final Matcher? _expectedValue;
 
-  /// Also asserts that the success value deeply equals [value].
-  SuccessMatcher andValue(Object? value) => SuccessMatcher._withValue(_expectedOutcomes, value);
+  /// Also asserts [value] — accepts a plain value (wrapped in [equals]) or any [Matcher].
+  SuccessMatcher andValue(Object? value) =>
+      SuccessMatcher._withValue(_expectedOutcomes, value is Matcher ? value : equals(value));
 
   @override
   bool matches(dynamic item, Map<Object?, Object?> matchState) {
     if (item is! Result) return false;
     if (!item.isSuccess) return false;
     if (!_outcomesEqual(item.outcomes, _expectedOutcomes)) return false;
-    if (_checkValue && !equals(_expectedValue).matches(item.value, <Object?, Object?>{})) return false;
+    if (_checkValue && !_expectedValue!.matches(item.value, matchState)) return false;
     return true;
   }
 
@@ -91,12 +111,24 @@ class SuccessMatcher extends Matcher {
 /// Matches a [Result] that is a [Failure] with the given [outcomes].
 ///
 /// Accepts a single [String] or a [List<String>], mirroring the [Failure]
-/// constructor. Chain [FailureMatcher.andContext] to also assert the context:
+/// constructor. Chain [FailureMatcher.andContext] to also assert the context.
+///
+/// [andContext] accepts a plain value (compared with [equals]) or any
+/// [Matcher] from `package:matcher` — allowing type checks, partial
+/// structure assertions, and any custom matcher:
 ///
 /// ```dart
-/// expect(registration, haveFailedWith('unauthorized'));
-/// expect(registration, haveFailedWith(['unauthorized', 'forbidden']));
-/// expect(registration, haveFailedWith('unauthorized').andContext('bad token'));
+/// expect(signup, haveFailedWith('unauthorized'));
+/// expect(signup, haveFailedWith(['unauthorized', 'forbidden']));
+///
+/// // plain value
+/// expect(signup, haveFailedWith('validationFailed').andContext({'email': ["can't be blank"]}));
+///
+/// // type check
+/// expect(signup, haveFailedWith('validationFailed').andContext(isA<Map<String, dynamic>>()));
+///
+/// // structure assertion
+/// expect(signup, haveFailedWith('validationFailed').andContext(containsPair('email', contains("can't be blank"))));
 /// ```
 FailureMatcher haveFailedWith(Object? outcomes) => FailureMatcher(_normalizeOutcomes(outcomes));
 
@@ -112,17 +144,18 @@ class FailureMatcher extends Matcher {
 
   final List<String> _expectedOutcomes;
   final bool _checkContext;
-  final Object? _expectedContext;
+  final Matcher? _expectedContext;
 
-  /// Also asserts that the failure context deeply equals [context].
-  FailureMatcher andContext(Object? context) => FailureMatcher._withContext(_expectedOutcomes, context);
+  /// Also asserts [context] — accepts a plain value (wrapped in [equals]) or any [Matcher].
+  FailureMatcher andContext(Object? context) =>
+      FailureMatcher._withContext(_expectedOutcomes, context is Matcher ? context : equals(context));
 
   @override
   bool matches(dynamic item, Map<Object?, Object?> matchState) {
     if (item is! Result) return false;
     if (!item.isFailure) return false;
     if (!_outcomesEqual(item.outcomes, _expectedOutcomes)) return false;
-    if (_checkContext && !equals(_expectedContext).matches(item.context, <Object?, Object?>{})) return false;
+    if (_checkContext && !_expectedContext!.matches(item.context, matchState)) return false;
     return true;
   }
 

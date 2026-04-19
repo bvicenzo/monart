@@ -300,21 +300,42 @@ Import `package:monart/monart_testing.dart` in your test files to access the mat
 
 ### Result matchers
 
-`haveSucceededWith` and `haveFailedWith` accept a single `String` or `List<String>`. Chain `.andValue` or `.andContext` to also assert the carried value or context:
+`haveSucceededWith` and `haveFailedWith` accept a single `String` or `List<String>`. Chain `.andValue` or `.andContext` to also assert the carried value or context.
+
+Both accept a plain value (compared with `equals`) or any `Matcher` from `package:matcher`:
 
 ```dart
 import 'package:monart/monart_testing.dart';
 
-final registration = UserCreateService(name: 'Alice', email: 'alice@example.com').call();
-final dataSync = DataSyncService(id: id).call();
+final login = UserLoginService(email: email, password: password).call();
+final signup = UserSignupService(name: name, email: email, password: password).call();
 
-expect(registration, haveSucceededWith('userCreated'));
-expect(registration, haveSucceededWith('userCreated').andValue(alice));
-expect(dataSync, haveSucceededWith(['ok', 'cached']));
+// outcome only
+expect(login, haveSucceededWith('ok'));
+expect(signup, haveFailedWith('unauthorized'));
+expect(login, haveSucceededWith(['ok', 'cached']));
+expect(signup, haveFailedWith(['unprocessableContent', 'clientError']));
 
-expect(registration, haveFailedWith('unauthorized'));
-expect(registration, haveFailedWith('validationFailed').andContext({'name': ["can't be blank"]}));
-expect(dataSync, haveFailedWith(['unprocessableContent', 'clientError']));
+// plain value / context
+expect(login, haveSucceededWith('ok').andValue(expectedSession));
+expect(signup, haveFailedWith('validationFailed').andContext({'email': ["can't be blank"]}));
+
+// type check
+expect(login, haveSucceededWith('ok').andValue(isA<UserSessionModel>()));
+expect(signup, haveFailedWith('validationFailed').andContext(isA<Map<String, dynamic>>()));
+
+// type + attribute assertions
+expect(
+  login,
+  haveSucceededWith('ok').andValue(
+    isA<UserSessionModel>()
+      .having((session) => session.user.name, 'name', 'Alice')
+      .having((session) => session.token, 'token', isNotEmpty),
+  ),
+);
+
+// structure assertion
+expect(signup, haveFailedWith('validationFailed').andContext(containsPair('email', contains("can't be blank"))));
 ```
 
 ### mockService — intercepting service calls

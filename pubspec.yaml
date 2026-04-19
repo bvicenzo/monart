@@ -1,6 +1,6 @@
 name: monart
 description: Railway-Oriented Programming for Dart. Build composable service objects that return Result values — never throw — using Success, Failure, and andThen.
-version: 0.1.1
+version: 0.2.0
 homepage: https://github.com/bvicenzo/monart
 repository: https://github.com/bvicenzo/monart
 issue_tracker: https://github.com/bvicenzo/monart/issues
