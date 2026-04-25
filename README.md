@@ -57,17 +57,13 @@ class UserCreateService extends ServiceBase<User> {
           .andThen((_) => _requireEmail())
           .andThen((_) => _persistUser());
 
-  Result<String> _requireName() =>
-      check('nameRequired', name, () => name.isNotEmpty);
+  Result<String> _requireName() => check('nameRequired', name, () => name.isNotEmpty);
 
-  Result<String> _requireEmail() =>
-      check('emailInvalid', email, () => email.contains('@'));
+  Result<String> _requireEmail() => check('emailInvalid', email, () => email.contains('@'));
 
   Result<User> _persistUser() {
     final newUser = User(name: name, email: email);
-    return newUser.save()
-        ? success('userCreated', newUser)
-        : failure('saveFailed', newUser);
+    return newUser.save() ? success('userCreated', newUser) : failure('saveFailed', newUser);
   }
 }
 
@@ -180,17 +176,13 @@ class UserCreateService extends ServiceBase<User> {
           .andThen((_) => _requireEmail())
           .andThen((_) => _persistUser());
 
-  Result<String> _requireName() =>
-      check('nameRequired', name, () => name.isNotEmpty);
+  Result<String> _requireName() => check('nameRequired', name, () => name.isNotEmpty);
 
-  Result<String> _requireEmail() =>
-      check('emailInvalid', email, () => email.contains('@'));
+  Result<String> _requireEmail() => check('emailInvalid', email, () => email.contains('@'));
 
   Result<User> _persistUser() {
     final newUser = User(name: name, email: email);
-    return newUser.save()
-        ? success('userCreated', newUser)
-        : failure('saveFailed', newUser);
+    return newUser.save() ? success('userCreated', newUser) : failure('saveFailed', newUser);
   }
 }
 ```
@@ -405,9 +397,7 @@ class PaymentOrchestrator extends ServiceBase<Receipt> {
 }
 
 // In tests:
-final orchestrator = PaymentOrchestrator(
-  paymentService: MockService.success('paid', receipt),
-);
+final orchestrator = PaymentOrchestrator(paymentService: MockService.success('paid', receipt));
 
 expect(orchestrator.run(), haveSucceededWith('paid'));
 ```
