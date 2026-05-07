@@ -56,6 +56,24 @@ class _TryRunService extends ServiceBase<String> {
   Result<String> run() => tryRun(outcomes, operation, onException: onException);
 }
 
+class _TryRunAsyncService extends ServiceBase<String> {
+  const _TryRunAsyncService({
+    required this.outcomes,
+    required this.operation,
+    this.onException,
+  });
+
+  final Object? outcomes;
+  final Future<String> Function() operation;
+  final Object? Function(Object, StackTrace)? onException;
+
+  @override
+  Result<String> run() => throw UnimplementedError();
+
+  Future<Result<String>> runAsync() =>
+      tryRunAsync(outcomes, operation, onException: onException);
+}
+
 class _PipelineService extends ServiceBase<String> {
   const _PipelineService({required this.name, required this.email});
 
@@ -205,6 +223,42 @@ void main() {
             ).call();
             expect(result.context, equals('mapped error'));
           });
+        });
+      });
+    });
+
+    describe('#tryRunAsync', () {
+      context('when the operation throws', () {
+        context('and no onException is provided', () {
+          it('fails with the exception as context', () async {
+            final exception = Exception('boom');
+            final result = await _TryRunAsyncService(
+              outcomes: 'fetchFailed',
+              operation: () async => throw exception,
+            ).runAsync();
+            expect(result, haveFailedWith('fetchFailed').andContext(same(exception)));
+          });
+        });
+
+        context('and onException is provided', () {
+          it('fails with the mapped context', () async {
+            final result = await _TryRunAsyncService(
+              outcomes: 'fetchFailed',
+              operation: () async => throw Exception('network'),
+              onException: (_, __) => 'mappedError',
+            ).runAsync();
+            expect(result, haveFailedWith('fetchFailed').andContext('mappedError'));
+          });
+        });
+      });
+
+      context('when the operation does not throw', () {
+        it('returns a Success with the operation result', () async {
+          final result = await _TryRunAsyncService(
+            outcomes: 'fetched',
+            operation: () async => 'data',
+          ).runAsync();
+          expect(result, haveSucceededWith('fetched').andValue('data'));
         });
       });
     });

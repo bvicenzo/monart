@@ -173,4 +173,40 @@ abstract class ServiceBase<Value> {
       return Failure(outcomes, onException?.call(exception, stack) ?? exception);
     }
   }
+
+  /// Runs [operation] asynchronously and wraps any thrown exception as a [Failure].
+  ///
+  /// The async counterpart of [tryRun]. Use this to call async external APIs,
+  /// device operations, or any async code that may throw, keeping the service
+  /// pipeline free of try/catch blocks:
+  ///
+  /// ```dart
+  /// Future<Result<void>> runAsync() =>
+  ///     tryRunAsync('saved', () async {
+  ///       await storage.write(key: 'key', value: value);
+  ///     });
+  /// ```
+  ///
+  /// Provide [onException] to convert the caught exception into a meaningful
+  /// context or map it to a different outcome:
+  ///
+  /// ```dart
+  /// Future<Result<bool>> runAsync() =>
+  ///     tryRunAsync(
+  ///       'checked',
+  ///       () => auth.canCheckBiometrics,
+  ///       onException: (exception, _) => 'unavailable',
+  ///     );
+  /// ```
+  Future<Result<Value>> tryRunAsync(
+    Object? outcomes,
+    Future<Value> Function() operation, {
+    Object? Function(Object exception, StackTrace stack)? onException,
+  }) async {
+    try {
+      return Success(outcomes, await operation());
+    } on Object catch (exception, stack) {
+      return Failure(outcomes, onException?.call(exception, stack) ?? exception);
+    }
+  }
 }

@@ -161,7 +161,7 @@ Both `onFailureOf('unprocessableContent', ...)` and `onFailureOf('clientError', 
 
 ### ServiceBase
 
-Subclass `ServiceBase<Value>` and implement `run()` as a pipeline of `andThen` steps. Use the built-in helpers — `success`, `failure`, `check`, `tryRun` — to produce results without constructing `Success`/`Failure` directly.
+Subclass `ServiceBase<Value>` and implement `run()` as a pipeline of `andThen` steps. Use the built-in helpers — `success`, `failure`, `check`, `tryRun`, `tryRunAsync` — to produce results without constructing `Success`/`Failure` directly.
 
 ```dart
 class UserCreateService extends ServiceBase<User> {
@@ -197,9 +197,9 @@ class UserCreateService extends ServiceBase<User> {
 check('emailInvalid', email, () => email.contains('@'))
 ```
 
-#### `tryRun` — wrapping code that may throw
+#### `tryRun` — wrapping synchronous code that may throw
 
-Use `tryRun` to call external APIs or repositories without `try/catch` in your service:
+Use `tryRun` to call synchronous external APIs or repositories without `try/catch` in your service:
 
 ```dart
 Result<Order> _fetchOrder() =>
@@ -210,6 +210,23 @@ Result<Order> _fetchOrder() =>
         NotFoundException() => 'notFound',
         TimeoutException()  => 'timeout',
         _                   => null, // re-uses the outcome tag as context
+      },
+    );
+```
+
+#### `tryRunAsync` — wrapping asynchronous code that may throw
+
+Use `tryRunAsync` for async operations. It is the async counterpart of `tryRun`:
+
+```dart
+Future<Result<Order>> _fetchOrder() =>
+    tryRunAsync(
+      'orderFetched',
+      () async => Order.fromJson(await ordersApi.get(orderId)),
+      onException: (exception, _) => switch (exception) {
+        TimeoutException() => 'timeout',
+        NotFoundException() => 'notFound',
+        _                  => null,
       },
     );
 ```
@@ -263,8 +280,8 @@ class OrderFetchService extends ServiceBase<Order> {
   @override
   Result<Order> run() => throw UnimplementedError('Use runAsync');
 
-  Future<Result<Order>> runAsync() async =>
-      tryRun(
+  Future<Result<Order>> runAsync() =>
+      tryRunAsync(
         'orderFetched',
         () async => Order.fromJson(await ordersApi.get(orderId)),
         onException: (exception, _) => switch (exception) {
