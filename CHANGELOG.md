@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-07
+
+### Changed
+
+- `ServiceBase#tryRunAsync` now uses its own `<OperationValue>` type parameter
+  instead of the class-level `Value`. This makes it possible to build linear
+  pipelines where intermediate steps return different types than the service's
+  final value — matching the existing behaviour of `check<CheckedValue>`.
+  All existing call sites continue to work via type inference.
+
 ## [0.3.0] - 2026-05-07
 
 ### Added

@@ -187,6 +187,18 @@ abstract class ServiceBase<Value> {
   ///     });
   /// ```
   ///
+  /// Because [T] is a method-level type parameter independent of the class's
+  /// [Value], intermediate steps in a pipeline can use any return type:
+  ///
+  /// ```dart
+  /// Future<Result<void>> runAsync() =>
+  ///     tryRunAsync('checkFailed', _canCheckBiometrics)
+  ///         .andThen(_requireBiometricSupport)
+  ///         .andThen(_fetchAvailableBiometrics)
+  ///         .andThen(_requireBiometricEnrolled)
+  ///         .andThen(_biometricAvailable);
+  /// ```
+  ///
   /// Provide [onException] to convert the caught exception into a meaningful
   /// context or map it to a different outcome:
   ///
@@ -198,9 +210,9 @@ abstract class ServiceBase<Value> {
   ///       onException: (exception, _) => 'unavailable',
   ///     );
   /// ```
-  Future<Result<Value>> tryRunAsync(
+  Future<Result<OperationValue>> tryRunAsync<OperationValue>(
     Object? outcomes,
-    Future<Value> Function() operation, {
+    Future<OperationValue> Function() operation, {
     Object? Function(Object exception, StackTrace stack)? onException,
   }) async {
     try {
